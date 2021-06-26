@@ -2,6 +2,7 @@
 using QuesoStruct.Types.Primitives;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace DATOneArchiver
@@ -56,24 +57,70 @@ namespace DATOneArchiver
             WalkEntries(blobs, entries, 1, entries[0].BlobIndex);
         }
 
-        public void Write()
-        {
-            var context = new Context(stream, endianess, Encoding.ASCII);
 
-            var blobs = new List<Blob>();
-            var 
-        }
+        //private class Node
+        //{
+        //    public Dictionary<string, Node> Children { get; }
+        //    public short? BlobIndex { get; }
+
+        //    public Node()
+        //    {
+        //        Children = new Dictionary<string, Node>();
+        //    }
+
+        //    public Node(short blobIndex)
+        //    {
+        //        BlobIndex = blobIndex;
+        //    }
+
+        //    public int WalkNodes(List<Entry> entries, List<NullTerminatingString> strings, int startIdx, int prevIdx)
+        //    {
+        //        int idx = startIdx;
+
+        //        var selfEntry = new Entry() { NodeIndex = (short)prevIdx };
+        //        entries.Add(selfEntry);
+
+        //        bool isFirstChild = true;
+        //        foreach (var child in Children)
+        //        {
+        //            var str = new NullTerminatingString() { Value = child.Key };
+        //            var entry = new Entry();
+
+        //            if (!isFirstChild)
+        //            {
+        //            }
+
+        //            if (child.Value.BlobIndex.HasValue)
+        //            {
+        //                entry.BlobIndex = child.Value.BlobIndex.Value;
+        //            }
+        //            else { }
+        //            strings.Add(str);
+        //        }
+        //    }
+        //}
+
+        //public void Write()
+        //{
+        //    var context = new Context(stream, endianess, Encoding.ASCII);
+
+        //    var blobs = new List<Blob>();
+        //    var strings = new Dictionary<string, NullTerminatingString>();
+
+
+        //}
 
         private int WalkEntries(IList<Blob> blobs, IList<Entry> entries, int startIdx, short terminator, string dir = "")
         {
             int idx = startIdx;
-            while (idx < entries.Count && entries[idx - 1].NodeIndex < terminator - 1)
+            do
             {
                 if (entries[idx].BlobIndex < 1)
                 {
                     var blob = blobs[-entries[idx].BlobIndex];
 
-                    var filePath = Path.Combine(dir, entries[idx].NodeName.Instance.Value);
+                    var fileName = entries[idx].NodeName.Instance.Value;
+                    var filePath = Path.Combine(dir, fileName);
                     var stream = blob.Data.Instance.Stream;
 
                     files.Add(filePath, stream);
@@ -87,7 +134,7 @@ namespace DATOneArchiver
 
                     idx = WalkEntries(blobs, entries, idx + 1, newTerm, Path.Combine(dir, subDir));
                 }
-            }
+            } while (idx < entries.Count && (entries[idx - 1].NodeIndex > 0 && entries[idx - 1].NodeIndex < terminator - 1) || (entries[idx - 1].NodeIndex == 0 && idx < terminator));
 
             return idx;
         }

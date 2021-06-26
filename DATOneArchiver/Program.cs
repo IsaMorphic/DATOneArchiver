@@ -15,10 +15,12 @@ namespace DATOneArchiver
 
             foreach (var file in archive.Files) 
             {
-                var dir = Path.GetDirectoryName(file.Key);
+                var path = Path.Combine(".", "extracted", file.Key);
+
+                var dir = Path.GetDirectoryName(path);
                 Directory.CreateDirectory(dir);
 
-                using var io = File.Create(file.Key);
+                using var io = File.Create(path);
                 file.Value.CopyTo(io);
 
                 Console.WriteLine($"{file.Key}");
