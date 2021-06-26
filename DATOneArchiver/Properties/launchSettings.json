@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DATOneArchiver": {
+      "commandName": "Project",
+      "commandLineArgs": "GAME.DAT"
+    }
+  }
+}
