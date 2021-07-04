@@ -1,4 +1,5 @@
 ﻿using QuesoStruct;
+using QuesoStruct.Types.Collections;
 using QuesoStruct.Types.Primitives;
 using System.Collections.Generic;
 using System.IO;
@@ -11,13 +12,8 @@ namespace DATOneArchiver
     {
         private static readonly ISerializer<DATFile> fileIO;
         private static readonly ISerializer<FileTable> tableIO;
-
-        private static readonly ISerializer<Blob> blobIO;
-        private static readonly ISerializer<Bytes> bytesIO;
-
-        private static readonly ISerializer<Entry> entryIO;
-        private static readonly ISerializer<NullTerminatingString> stringIO;
-
+        private static readonly ISerializer<Collection<Bytes>> bytesIO;
+        private static readonly ISerializer<Dummy> dummyIO;
 
         public IDictionary<string, Stream> Files => files;
         private readonly SortedDictionary<string, Stream> files;
@@ -29,12 +25,8 @@ namespace DATOneArchiver
         {
             fileIO = Serializers.Get<DATFile>();
             tableIO = Serializers.Get<FileTable>();
-
-            blobIO = Serializers.Get<Blob>();
-            bytesIO = Serializers.Get<Bytes>();
-
-            entryIO = Serializers.Get<Entry>();
-            stringIO = Serializers.Get<NullTerminatingString>();
+            bytesIO = Serializers.Get<Collection<Bytes>>();
+            dummyIO = Serializers.Get<Dummy>();
         }
 
         public Archive(Stream stream, Endianess endianess)
@@ -58,57 +50,179 @@ namespace DATOneArchiver
         }
 
 
-        //private class Node
-        //{
-        //    public Dictionary<string, Node> Children { get; }
-        //    public short? BlobIndex { get; }
+        private class Node
+        {
+            public string Name { get; }
+            public Dictionary<string, Node> Children { get; }
 
-        //    public Node()
-        //    {
-        //        Children = new Dictionary<string, Node>();
-        //    }
+            public short? BlobIndex { get; set; }
 
-        //    public Node(short blobIndex)
-        //    {
-        //        BlobIndex = blobIndex;
-        //    }
+            public Node this[string path]
+            {
+                get
+                {
+                    var tokens = Path.TrimEndingDirectorySeparator(path)
+                        .Split(Path.DirectorySeparatorChar);
 
-        //    public int WalkNodes(List<Entry> entries, List<NullTerminatingString> strings, int startIdx, int prevIdx)
-        //    {
-        //        int idx = startIdx;
+                    var current = this;
+                    foreach (var token in tokens)
+                    {
+                        if (current.Children.ContainsKey(token))
+                            current = current.Children[token];
+                        else
+                        {
+                            Node node;
+                            if (Path.HasExtension(token))
+                                node = new Node(token, null);
+                            else
+                                node = new Node(token);
 
-        //        var selfEntry = new Entry() { NodeIndex = (short)prevIdx };
-        //        entries.Add(selfEntry);
+                            current.Children.Add(token, node);
+                            current = node;
+                        }
+                    }
 
-        //        bool isFirstChild = true;
-        //        foreach (var child in Children)
-        //        {
-        //            var str = new NullTerminatingString() { Value = child.Key };
-        //            var entry = new Entry();
+                    return current;
+                }
+            }
 
-        //            if (!isFirstChild)
-        //            {
-        //            }
+            public Node()
+            {
+                Children = new Dictionary<string, Node>();
+            }
 
-        //            if (child.Value.BlobIndex.HasValue)
-        //            {
-        //                entry.BlobIndex = child.Value.BlobIndex.Value;
-        //            }
-        //            else { }
-        //            strings.Add(str);
-        //        }
-        //    }
-        //}
+            public Node(string name)
+            {
+                Name = name;
+                Children = new Dictionary<string, Node>();
+            }
 
-        //public void Write()
-        //{
-        //    var context = new Context(stream, endianess, Encoding.ASCII);
+            public Node(string name, short? blobIndex)
+            {
+                Name = name;
+                BlobIndex = blobIndex;
+            }
 
-        //    var blobs = new List<Blob>();
-        //    var strings = new Dictionary<string, NullTerminatingString>();
+            public int WalkNodes(Collection<Entry> entries, Collection<NullTerminatingString> strings, int startIdx, out int secIdx)
+            {
+                secIdx = 0;
+                int prevIdx = 0;
+                int idx = startIdx;
+                bool isFirstChild = true;
 
+                foreach (var child in Children.Values)
+                {
+                    var entry = new Entry(entries);
+                    entries.Add(entry);
 
-        //}
+                    var str = new NullTerminatingString(entry) { Value = child.Name };
+                    strings.Add(str);
+
+                    if (child.BlobIndex.HasValue)
+                    {
+                        if (!isFirstChild)
+                            entry.NodeIndex = (short)idx++;
+                        entry.BlobIndex = child.BlobIndex.Value;
+                    }
+                    else
+                    {
+                        idx = child.WalkNodes(entries, strings, idx, out int temp);
+
+                        if (!isFirstChild)
+                            entry.NodeIndex = (short)prevIdx;
+                        prevIdx = temp;
+
+                        entry.BlobIndex = (short)idx++;
+                    }
+
+                    if (isFirstChild)
+                    {
+                        secIdx = idx - 1;
+                        isFirstChild = false;
+                    }
+                }
+
+                return idx;
+            }
+        }
+
+        public void Write()
+        {
+            var context = new Context(stream, endianess, Encoding.ASCII);
+
+            var datFile = new DATFile();
+            var table = new FileTable(datFile)
+            {
+                Checksum = uint.MaxValue
+            };
+            var footer = new Dummy();
+
+            var bytes = new Collection<Bytes>();
+            var blobs = new Collection<Blob>(table);
+
+            foreach (var file in Files.Values)
+            {
+                var blob = new Blob(blobs)
+                {
+                    Size32 = (uint)file.Length,
+                    Size64 = (uint)file.Length,
+                };
+                var inst = new Bytes(blob) { Stream = file };
+
+                bytes.Add(inst);
+                blobs.Add(blob);
+            }
+
+            var entries = new Collection<Entry>(table);
+            var strings = new Collection<NullTerminatingString>(table);
+
+            var root = new Node("");
+
+            short idx = 0;
+            foreach (var file in Files.Keys)
+            {
+                root[file].BlobIndex = idx--;
+            }
+
+            var entry = new Entry(entries)
+            {
+                BlobIndex = 1
+            };
+            entries.Add(entry);
+
+            var name = new NullTerminatingString(entry) { Value = root.Name };
+            strings.Add(name);
+
+            root.WalkNodes(entries, strings, 2, out int _);
+
+            table.NumBlobs = (uint)blobs.Count;
+            table.Blobs = blobs;
+
+            table.NumEntries = (uint)entries.Count;
+            table.Entries = entries;
+
+            table.Names = strings;
+
+            fileIO.Write(datFile, context);
+            bytesIO.Write(bytes, context);
+            tableIO.Write(table, context);
+            dummyIO.Write(footer, context);
+
+            datFile.TablePointer.Instance = table;
+            table.NamesEndPtr.Instance = footer;
+
+            foreach (var str in strings)
+            {
+                (str.Parent as Entry).NodeName.Instance = str;
+            }
+
+            foreach (var data in bytes)
+            {
+                (data.Parent as Blob).Data.Instance = data;
+            }
+
+            context.RewriteUnresolvedReferences();
+        }
 
         private int WalkEntries(IList<Blob> blobs, IList<Entry> entries, int startIdx, short terminator, string dir = "")
         {

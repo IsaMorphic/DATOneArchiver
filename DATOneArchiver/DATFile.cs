@@ -15,5 +15,8 @@ namespace DATOneArchiver
         [StructMember]
         [AutoInitialize]
         public UInt32Pointer<FileTable> TablePointer { get; set; }
+
+        [StructMember]
+        public uint Unk000 { get; set; }
     }
 }

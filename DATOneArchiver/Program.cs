@@ -8,8 +8,8 @@ namespace DATOneArchiver
     class Program
     {
         private static readonly Dictionary<string, Endianess> endianesses =
-            new Dictionary<string, Endianess> 
-            { 
+            new Dictionary<string, Endianess>
+            {
                 { "LITTLE", Endianess.Little },
                 { "BIG", Endianess.Big },
             };
@@ -20,18 +20,25 @@ namespace DATOneArchiver
             var archive = new Archive(stream, endianesses[args[1].ToUpperInvariant()]);
             archive.Read();
 
-            foreach (var file in archive.Files) 
+            //foreach (var file in archive.Files)
+            //{
+            //    var path = Path.Combine(".", "extracted", file.Key);
+
+            //    var dir = Path.GetDirectoryName(path);
+            //    Directory.CreateDirectory(dir);
+
+            //    using var io = File.Create(path);
+            //    file.Value.CopyTo(io);
+
+            //    Console.WriteLine($"{file.Key}");
+            //}
+
+            var newArchive = new Archive(File.Create("test.dat"), Endianess.Little);
+            foreach (var file in archive.Files)
             {
-                var path = Path.Combine(".", "extracted", file.Key);
-
-                var dir = Path.GetDirectoryName(path);
-                Directory.CreateDirectory(dir);
-
-                using var io = File.Create(path);
-                file.Value.CopyTo(io);
-
-                Console.WriteLine($"{file.Key}");
+                newArchive.Files.Add(file);
             }
+            newArchive.Write();
         }
     }
 }
