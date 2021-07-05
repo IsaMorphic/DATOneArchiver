@@ -1,0 +1,3 @@
+[submodule "rnc_propack"]
+	path = rnc_propack
+	url = https://github.com/lab313ru/rnc_propack_source.git
