@@ -6,7 +6,7 @@ using QuesoStruct.Types.Primitives;
 namespace DATOneArchiver
 {
     [StructType]
-    public partial class FileTable : IPointerOwner, ICollectionOwner<Blob>, ICollectionOwner<Entry>, ICollectionOwner<NullTerminatingString>
+    public partial class FileTable : IPointerOwner, ICollectionOwner<Blob>, ICollectionOwner<Entry>
     {
         public IStructInstance RelativeOffsetBase => Parent;
         public long AddedOffsetFromBase => 0;
@@ -35,11 +35,6 @@ namespace DATOneArchiver
         public Collection<Entry> Entries { get; set; }
 
         [StructMember]
-        [AutoInitialize]
-        public UInt32Pointer<Dummy> NamesEndPtr { get; set; }
-
-        [StructMember]
-        public Collection<NullTerminatingString> Names { get; set; }
-        long? ICollectionOwner<NullTerminatingString>.ItemCount => NumEntries;
+        public NameList Names { get; set; }
     }
 }

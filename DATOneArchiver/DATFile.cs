@@ -17,6 +17,8 @@ namespace DATOneArchiver
         public UInt32Pointer<FileTable> TablePointer { get; set; }
 
         [StructMember]
-        public uint Unk000 { get; set; }
+        // TT Games 32 bit signing key.
+        // I believe only certain specific values are valid in this field, it is unrelated to contents.
+        public uint TTGKey { get; set; }
     }
 }

@@ -13,14 +13,16 @@ namespace DATOneArchiver
                 { "LITTLE", Endianess.Little },
                 { "BIG", Endianess.Big },
             };
+
         static void Main(string[] args)
         {
-            using var stream = File.OpenRead(args[0]);
+            var endianess = endianesses[args[1].ToUpperInvariant()];
+            //using var stream = File.OpenRead(args[0]);
 
-            var archive = new Archive(stream, endianesses[args[1].ToUpperInvariant()]);
-            archive.Read();
+            //using var oldArchive = new Archive(stream, endianess);
+            //oldArchive.Read();
 
-            //foreach (var file in archive.Files)
+            //foreach (var file in oldArchive.Files)
             //{
             //    var path = Path.Combine(".", "extracted", file.Key);
 
@@ -33,12 +35,21 @@ namespace DATOneArchiver
             //    Console.WriteLine($"{file.Key}");
             //}
 
-            var newArchive = new Archive(File.Create("test.dat"), Endianess.Little);
-            foreach (var file in archive.Files)
+            using var newArchive = new Archive(File.Create("new.dat"), endianess);
+
+            //foreach (var file in oldArchive.Files)
+            //{
+            //    newArchive.Files.Add(file);
+            //}
+
+            foreach (var path in Directory.EnumerateFiles("./extracted", "*.*", SearchOption.AllDirectories))
             {
-                newArchive.Files.Add(file);
+                var file = Path.GetRelativePath("./extracted", path);
+                newArchive.Files.Add(file, File.OpenRead(path));
+                Console.WriteLine(file);
             }
-            newArchive.Write();
+
+            newArchive.Write(2048);
         }
     }
 }

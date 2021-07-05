@@ -1,18 +1,18 @@
 ﻿using QuesoStruct;
 using QuesoStruct.Types.Collections;
 using QuesoStruct.Types.Primitives;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace DATOneArchiver
 {
-    public class Archive
+    public class Archive : IDisposable
     {
         private static readonly ISerializer<DATFile> fileIO;
         private static readonly ISerializer<FileTable> tableIO;
-        private static readonly ISerializer<Collection<Bytes>> bytesIO;
+        private static readonly ISerializer<Bytes> bytesIO;
         private static readonly ISerializer<Dummy> dummyIO;
 
         public IDictionary<string, Stream> Files => files;
@@ -25,7 +25,7 @@ namespace DATOneArchiver
         {
             fileIO = Serializers.Get<DATFile>();
             tableIO = Serializers.Get<FileTable>();
-            bytesIO = Serializers.Get<Collection<Bytes>>();
+            bytesIO = Serializers.Get<Bytes>();
             dummyIO = Serializers.Get<Dummy>();
         }
 
@@ -122,6 +122,7 @@ namespace DATOneArchiver
                     {
                         if (!isFirstChild)
                             entry.NodeIndex = (short)idx++;
+                        else idx++;
                         entry.BlobIndex = child.BlobIndex.Value;
                     }
                     else
@@ -146,7 +147,7 @@ namespace DATOneArchiver
             }
         }
 
-        public void Write()
+        public void Write(int fileAlign = 1)
         {
             var context = new Context(stream, endianess, Encoding.ASCII);
 
@@ -164,8 +165,8 @@ namespace DATOneArchiver
             {
                 var blob = new Blob(blobs)
                 {
-                    Size32 = (uint)file.Length,
-                    Size64 = (uint)file.Length,
+                    ActualSize = (uint)file.Length,
+                    UncompressedSize = (uint)file.Length,
                 };
                 var inst = new Bytes(blob) { Stream = file };
 
@@ -184,16 +185,13 @@ namespace DATOneArchiver
                 root[file].BlobIndex = idx--;
             }
 
-            var entry = new Entry(entries)
-            {
-                BlobIndex = 1
-            };
+            var entry = new Entry(entries);
             entries.Add(entry);
 
             var name = new NullTerminatingString(entry) { Value = root.Name };
             strings.Add(name);
 
-            root.WalkNodes(entries, strings, 2, out int _);
+            entry.BlobIndex = (short)(root.WalkNodes(entries, strings, 2, out int _) + 1);
 
             table.NumBlobs = (uint)blobs.Count;
             table.Blobs = blobs;
@@ -201,15 +199,25 @@ namespace DATOneArchiver
             table.NumEntries = (uint)entries.Count;
             table.Entries = entries;
 
-            table.Names = strings;
+            table.Names = new NameList(table);
+            table.Names.Strings = strings;
 
             fileIO.Write(datFile, context);
-            bytesIO.Write(bytes, context);
+
+            long offset = fileAlign;
+            foreach (var data in bytes) 
+            {
+                data.Offset = offset;
+                bytesIO.Write(data, context);
+
+                offset += fileAlign > 1 ? (data.Stream.Length / fileAlign + 1) * fileAlign : data.Stream.Length;
+            }
+
             tableIO.Write(table, context);
             dummyIO.Write(footer, context);
 
             datFile.TablePointer.Instance = table;
-            table.NamesEndPtr.Instance = footer;
+            table.Names.EndPtr.Instance = footer;
 
             foreach (var str in strings)
             {
@@ -251,6 +259,30 @@ namespace DATOneArchiver
             } while (idx < entries.Count && (entries[idx - 1].NodeIndex > 0 && entries[idx - 1].NodeIndex < terminator - 1) || (entries[idx - 1].NodeIndex == 0 && idx < terminator));
 
             return idx;
+        }
+
+        private bool disposedValue;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    foreach (var file in Files.Values)
+                    {
+                        file.Dispose();
+                    }
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

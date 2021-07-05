@@ -15,7 +15,7 @@ namespace DATOneArchiver
         public bool IsNullPointer(IStructReference refr) => false;
         public void SetNullPointer(IStructReference refr) { }
 
-        public IStructInstance RelativeOffsetBase => (Parent.Parent as FileTable).Names;
+        public IStructInstance RelativeOffsetBase => (Parent.Parent as FileTable).Names.Strings;
         public long AddedOffsetFromBase => 0;
 
         [StructMember]

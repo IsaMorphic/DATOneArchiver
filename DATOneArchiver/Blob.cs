@@ -16,12 +16,16 @@ namespace DATOneArchiver
         [StructMember]
         [AutoInitialize]
         public UInt32Pointer<Bytes> Data { get; set; }
-        public long BytesLength => Size32;
+        public long BytesLength => ActualSize;
 
         [StructMember]
-        public uint Size32 { get; set; }
+        public uint ActualSize { get; set; }
 
         [StructMember]
-        public ulong Size64 { get; set; }
+        public uint UncompressedSize { get; set; }
+
+        [StructMember]
+        public uint CompressFlag { get; set; }
+        public bool IsCompressed => CompressFlag == 1;
     }
 }

@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="QuesoStruct" Version="1.0.6" />
+    <PackageReference Include="QuesoStruct" Version="1.0.7" />
   </ItemGroup>
 
 </Project>
