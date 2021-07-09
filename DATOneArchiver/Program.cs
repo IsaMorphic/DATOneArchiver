@@ -17,10 +17,10 @@ namespace DATOneArchiver
         static void Main(string[] args)
         {
             var endianess = endianesses[args[1].ToUpperInvariant()];
-            //using var stream = File.OpenRead(args[0]);
+            using var stream = File.OpenRead(args[0]);
 
-            //using var oldArchive = new Archive(stream, endianess);
-            //oldArchive.Read();
+            using var oldArchive = new Archive(stream, endianess);
+            oldArchive.Read();
 
             //foreach (var file in oldArchive.Files)
             //{
@@ -37,17 +37,18 @@ namespace DATOneArchiver
 
             using var newArchive = new Archive(File.Create("new.dat"), endianess);
 
-            //foreach (var file in oldArchive.Files)
-            //{
-            //    newArchive.Files.Add(file);
-            //}
-
-            foreach (var path in Directory.EnumerateFiles("./extracted", "*.*", SearchOption.AllDirectories))
+            foreach (var path in oldArchive.Files.Keys)
             {
-                var file = Path.GetRelativePath("./extracted", path);
-                newArchive.Files.Add(file, File.OpenRead(path));
-                Console.WriteLine(file);
+                newArchive.Files.Add(path, File.OpenRead(Path.Combine("extracted", path)));
+                Console.WriteLine(path);
             }
+
+            //foreach (var path in Directory.EnumerateFiles("./extracted", "*.*", SearchOption.AllDirectories))
+            //{
+            //    var file = Path.GetRelativePath("./extracted", path);
+            //    newArchive.Files.Add(file, File.OpenRead(path));
+            //    Console.WriteLine(file);
+            //}
 
             newArchive.Write(2048);
         }
