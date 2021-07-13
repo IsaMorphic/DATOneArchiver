@@ -11,6 +11,8 @@ namespace DATOneArchiver
 {
     public class Archive : IDisposable
     {
+        private static readonly string[] BUZZ_WORDS = new string[] { "ai", "old", "tmp" };
+
         private static readonly ISerializer<DATFile> fileIO;
         private static readonly ISerializer<FileTable> tableIO;
         private static readonly ISerializer<Bytes> bytesIO;
@@ -58,6 +60,7 @@ namespace DATOneArchiver
             public string Name { get; }
             public Dictionary<string, Node> Children { get; }
 
+            public int Depth { get; set; }
             public short? BlobIndex { get; set; }
 
             public Node this[string path]
@@ -94,26 +97,54 @@ namespace DATOneArchiver
             public Node()
             {
                 Children = new Dictionary<string, Node>();
+                Depth = -1;
             }
 
             public Node(string name)
             {
                 Name = name;
                 Children = new Dictionary<string, Node>();
+                Depth = -1;
             }
 
             public Node(string name, short? blobIndex)
             {
                 Name = name;
                 BlobIndex = blobIndex;
+                Depth = -1;
             }
 
-            public int WalkNodes(Collection<Entry> entries, Collection<NullTerminatingString> strings, int startIdx, out int secIdx)
+            public int ChartDepth(int level = 0)
             {
-                secIdx = 0;
+                int maxDepth;
+                if (Children != null && !Children.Values.All(c => c.BlobIndex.HasValue))
+                    maxDepth = Children.Values.Max(c => c.ChartDepth(level + 1));
+                else
+                    maxDepth = level;
+
+                Depth = maxDepth;
+                return maxDepth;
+            }
+
+            public void SetDepth(int depth)
+            {
+                Depth = depth;
+                if (Children != null && !Children.Values.All(c => c.BlobIndex.HasValue))
+                {
+                    foreach (var child in Children.Values)
+                    {
+                        child.SetDepth(depth);
+                    }
+                }
+            }
+
+            public int WalkNodes(Collection<Entry> entries, Collection<NullTerminatingString> strings, int level, int startIdx, out int firstIdx)
+            {
+                firstIdx = 0;
                 int idx = startIdx;
                 bool isFirstChild = true;
 
+                int count = 0;
                 foreach (var child in Children.Values)
                 {
                     var entry = new Entry(entries);
@@ -128,44 +159,45 @@ namespace DATOneArchiver
                             entry.NodeIndex = (short)idx++;
                         else
                         {
-                            secIdx = idx + 1;
+                            firstIdx = ++idx;
                             isFirstChild = false;
-                            idx++;
                         }
                         entry.BlobIndex = child.BlobIndex.Value;
                     }
                     else
                     {
-                        var newIdx = child.WalkNodes(entries, strings, idx + 1, out int temp);
+                        var newIdx = child.WalkNodes(entries, strings, level + 1, idx + 1, out int tempFirst);
 
-                        if (isFirstChild && child.Children.Values.All(c => !c.BlobIndex.HasValue))
+                        if (!isFirstChild)
                         {
-                            entry.NodeIndex = (short)idx;
-                            entry.BlobIndex = (short)temp;
-
+                            if (BUZZ_WORDS.Contains(child.Name.ToLowerInvariant()))
+                                entry.NodeIndex = (short)idx;
+                            else
+                                entry.NodeIndex = (short)firstIdx;
+                        }
+                        else
                             isFirstChild = false;
-                            idx = newIdx;
+
+                        if (child.Children.Values.All(c => c.BlobIndex.HasValue))
+                        {
+                            entry.BlobIndex = (short)newIdx;
                         }
                         else
                         {
-                            if (isFirstChild)
-                                isFirstChild = false;
-
-                            entry.NodeIndex = (short)secIdx;
-                            entry.BlobIndex = (short)newIdx;
-
-                            idx = newIdx;
+                            entry.BlobIndex = (short)tempFirst;
                         }
 
-                        secIdx = temp - 1;
+                        firstIdx = idx + 1;
+                        idx = newIdx;
                     }
+                    count++;
                 }
 
                 return idx;
             }
         }
 
-        public void Write(int? fileAlign = null)
+        public void Write(int fileAlign = 1)
         {
             var context = new Context(stream, endianess, Encoding.ASCII);
 
@@ -220,13 +252,20 @@ namespace DATOneArchiver
                 root[file].BlobIndex = idx--;
             }
 
+            root.ChartDepth();
+            foreach (var child in root.Children.Values)
+            {
+                child.SetDepth(child.Depth);
+            }
+
             var entry = new Entry(entries);
             entries.Add(entry);
 
             var name = new NullTerminatingString(entry) { Value = root.Name };
             strings.Add(name);
 
-            entry.BlobIndex = (short)root.WalkNodes(entries, strings, 0, out int _);
+            root.WalkNodes(entries, strings, 0, 0, out int blobIdx);
+            entry.BlobIndex = (short)blobIdx;
 
             table.NumBlobs = (uint)blobs.Count;
             table.Blobs = blobs;
@@ -241,13 +280,17 @@ namespace DATOneArchiver
 
             fileIO.Write(datFile, context);
 
-            long offset = fileAlign ?? 8;
+            long offset = fileAlign == 1 ? 8 : fileAlign;
             foreach (var data in bytes)
             {
                 data.Offset = offset;
                 bytesIO.Write(data, context);
 
-                offset += fileAlign.HasValue ? (data.Stream.Length / fileAlign.Value + 1) * fileAlign.Value : data.Stream.Length;
+                var length = data.Stream.Length;
+                if ((offset + length) % fileAlign == 0)
+                    offset += length;
+                else
+                    offset = ((offset + length) / fileAlign + 1) * fileAlign;
             }
 
             tableIO.Write(table, context);

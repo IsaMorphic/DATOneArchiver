@@ -43,14 +43,14 @@ namespace DATOneArchiver
                 Console.WriteLine(path);
             }
 
+            newArchive.Write(2048);
+
             //foreach (var path in Directory.EnumerateFiles("./extracted", "*.*", SearchOption.AllDirectories))
             //{
             //    var file = Path.GetRelativePath("./extracted", path);
             //    newArchive.Files.Add(file, File.OpenRead(path));
             //    Console.WriteLine(file);
             //}
-
-            newArchive.Write(2048);
         }
     }
 }
