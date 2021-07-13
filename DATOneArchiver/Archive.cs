@@ -3,26 +3,43 @@ using QuesoStruct.Types.Collections;
 using QuesoStruct.Types.Primitives;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 
 namespace DATOneArchiver
 {
+    public enum ArchiveMode
+    {
+        ReadOnly,
+        BuildNew,
+    }
+
     public class Archive : IDisposable
     {
+        private const string SIGNATURE = "IAN.S";
+
         private static readonly string[] BUZZ_WORDS = new string[] { "ai", "old", "tmp" };
 
         private static readonly ISerializer<DATFile> fileIO;
         private static readonly ISerializer<FileTable> tableIO;
         private static readonly ISerializer<Bytes> bytesIO;
-        private static readonly ISerializer<Dummy> dummyIO;
         private static readonly ISerializer<RNCHeader> rncIO;
+
+        public static string RNCProPackPath { get; set; } = "./propack/rnc_propack.exe";
+        public static string VirtualFileDir { get; set; } = "./_virt";
+
+        public static ILogger Logger { get; set; } = new ConsoleLogger();
 
         public IDictionary<string, Stream> Files => files;
         private readonly Dictionary<string, Stream> files;
 
+        public uint TTGKey { get; private set; }
+
+        private readonly string filePath;
         private readonly Stream stream;
+
         private readonly Endianess endianess;
 
         static Archive()
@@ -30,28 +47,19 @@ namespace DATOneArchiver
             fileIO = Serializers.Get<DATFile>();
             tableIO = Serializers.Get<FileTable>();
             bytesIO = Serializers.Get<Bytes>();
-            dummyIO = Serializers.Get<Dummy>();
             rncIO = Serializers.Get<RNCHeader>();
         }
 
-        public Archive(Stream stream, Endianess endianess)
+        public Archive(string filePath, ArchiveMode mode, Endianess endianess)
         {
             files = new Dictionary<string, Stream>();
 
-            this.stream = stream;
+            this.filePath = filePath;
+            if (mode == ArchiveMode.BuildNew)
+                stream = File.Create(this.filePath);
+            else
+                stream = File.OpenRead(this.filePath);
             this.endianess = endianess;
-        }
-
-        public void Read()
-        {
-            var context = new Context(stream, endianess, Encoding.ASCII);
-            var datFile = fileIO.Read(context);
-            var table = datFile.TablePointer.Instance;
-
-            var blobs = table.Blobs;
-            var entries = table.Entries;
-
-            WalkEntries(blobs, entries, 1, entries[0].BlobIndex);
         }
 
 
@@ -97,48 +105,21 @@ namespace DATOneArchiver
             public Node()
             {
                 Children = new Dictionary<string, Node>();
-                Depth = -1;
             }
 
             public Node(string name)
             {
                 Name = name;
                 Children = new Dictionary<string, Node>();
-                Depth = -1;
             }
 
             public Node(string name, short? blobIndex)
             {
                 Name = name;
                 BlobIndex = blobIndex;
-                Depth = -1;
             }
 
-            public int ChartDepth(int level = 0)
-            {
-                int maxDepth;
-                if (Children != null && !Children.Values.All(c => c.BlobIndex.HasValue))
-                    maxDepth = Children.Values.Max(c => c.ChartDepth(level + 1));
-                else
-                    maxDepth = level;
-
-                Depth = maxDepth;
-                return maxDepth;
-            }
-
-            public void SetDepth(int depth)
-            {
-                Depth = depth;
-                if (Children != null && !Children.Values.All(c => c.BlobIndex.HasValue))
-                {
-                    foreach (var child in Children.Values)
-                    {
-                        child.SetDepth(depth);
-                    }
-                }
-            }
-
-            public int WalkNodes(Collection<Entry> entries, Collection<NullTerminatingString> strings, int level, int startIdx, out int firstIdx)
+            public int WalkNodes(Collection<Entry> entries, Collection<NullTerminatingString> strings, int startIdx, out int firstIdx)
             {
                 firstIdx = 0;
                 int idx = startIdx;
@@ -166,7 +147,7 @@ namespace DATOneArchiver
                     }
                     else
                     {
-                        var newIdx = child.WalkNodes(entries, strings, level + 1, idx + 1, out int tempFirst);
+                        var newIdx = child.WalkNodes(entries, strings, idx + 1, out int tempFirst);
 
                         if (!isFirstChild)
                         {
@@ -197,15 +178,24 @@ namespace DATOneArchiver
             }
         }
 
-        public void Write(int fileAlign = 1)
+        public void Write(uint ttgKey, int fileAlign = 1)
         {
+            Logger.WriteLine("Building archive...");
+
+            TTGKey = ttgKey;
             var context = new Context(stream, endianess, Encoding.ASCII);
 
-            var datFile = new DATFile();
+            var datFile = new DATFile()
+            {
+                TTGKey = TTGKey,
+            };
+
             var table = new FileTable(datFile)
             {
                 Checksum = uint.MaxValue
             };
+
+            Logger.WriteLine("Indexing blobs...");
 
             var bytes = new Collection<Bytes>();
             var blobs = new Collection<Blob>(table);
@@ -213,12 +203,25 @@ namespace DATOneArchiver
             foreach (var file in Files.Values)
             {
                 Blob blob;
+                file.Seek(0, SeekOrigin.Begin);
 
+                // RNC check (read header)
+                var ctx = new Context(file, Endianess.Big, Encoding.ASCII);
+
+                RNCHeader header = null;
                 try
                 {
-                    var ctx = new Context(file, Endianess.Big, Encoding.ASCII);
-                    var header = rncIO.Read(ctx);
+                    header = rncIO.Read(ctx);
+                }
+                catch (EndOfStreamException) { }
+                finally
+                {
+                    stream.Seek(0, SeekOrigin.Begin);
+                }
 
+                // RNC check (set flags if valid)
+                if (header?.IsValid ?? false)
+                {
                     blob = new Blob(blobs)
                     {
                         ActualSize = (uint)file.Length,
@@ -226,7 +229,7 @@ namespace DATOneArchiver
                         CompressFlag = 1,
                     };
                 }
-                catch (InvalidOperationException)
+                else
                 {
                     blob = new Blob(blobs)
                     {
@@ -241,6 +244,8 @@ namespace DATOneArchiver
                 blobs.Add(blob);
             }
 
+            Logger.WriteLine("Constructing file table...");
+
             var entries = new Collection<Entry>(table);
             var strings = new Collection<NullTerminatingString>(table);
 
@@ -252,19 +257,13 @@ namespace DATOneArchiver
                 root[file].BlobIndex = idx--;
             }
 
-            root.ChartDepth();
-            foreach (var child in root.Children.Values)
-            {
-                child.SetDepth(child.Depth);
-            }
-
             var entry = new Entry(entries);
             entries.Add(entry);
 
             var name = new NullTerminatingString(entry) { Value = root.Name };
             strings.Add(name);
 
-            root.WalkNodes(entries, strings, 0, 0, out int blobIdx);
+            root.WalkNodes(entries, strings, 0, out int blobIdx);
             entry.BlobIndex = (short)blobIdx;
 
             table.NumBlobs = (uint)blobs.Count;
@@ -275,14 +274,18 @@ namespace DATOneArchiver
 
             table.Names = new NameList(table);
             table.Names.Strings = strings;
+            table.Names.SectionLength = (uint)(strings.Sum(s => s.Value.Length) + strings.Count + (SIGNATURE.Length + 1));
+            table.Names.Signature.Value = SIGNATURE;
 
-            var footer = new Dummy(table.Names);
+            Logger.WriteLine($"Writing archive to {filePath}");
 
             fileIO.Write(datFile, context);
 
             long offset = fileAlign == 1 ? 8 : fileAlign;
             foreach (var data in bytes)
             {
+                Logger.Write(".");
+
                 data.Offset = offset;
                 bytesIO.Write(data, context);
 
@@ -294,10 +297,8 @@ namespace DATOneArchiver
             }
 
             tableIO.Write(table, context);
-            dummyIO.Write(footer, context);
 
             datFile.TablePointer.Instance = table;
-            table.Names.EndPtr.Instance = footer;
 
             foreach (var str in strings)
             {
@@ -310,31 +311,61 @@ namespace DATOneArchiver
             }
 
             context.RewriteUnresolvedReferences();
+
+            Logger.WriteLine("");
+            Logger.WriteLine("Build/write complete!!!");
         }
 
-        private void PrintEntry(Entry entry, int idx, int level)
-        {
-            var indent = new char[level * 3];
-            Array.Fill(indent, ' ');
-            Console.WriteLine($"{new string(indent)}{idx:X4};{entry.BlobIndex:X4};{entry.NodeIndex:X4};\"{entry.NodeName.Instance.Value}\"");
-        }
-
-        private int WalkEntries(IList<Blob> blobs, IList<Entry> entries, int startIdx, short terminator, string dir = "", int level = 0, bool debug = true)
+        private int WalkEntries(IList<Blob> blobs, IList<Entry> entries, int startIdx, short terminator, string dir = "")
         {
             int idx = startIdx;
             do
             {
-                PrintEntry(entries[idx], idx, level);
-
                 if (entries[idx].BlobIndex < 1)
                 {
                     var blob = blobs[-entries[idx].BlobIndex];
 
                     var fileName = entries[idx].NodeName.Instance.Value;
                     var filePath = Path.Combine(dir, fileName);
-                    var stream = blob.Data.Instance.Stream;
 
-                    files.Add(filePath, stream);
+                    var stream = blob.Data.Instance.Stream;
+                    var ctx = new Context(stream, Endianess.Big, Encoding.ASCII);
+
+                    RNCHeader header = null;
+                    try
+                    {
+                        header = rncIO.Read(ctx);
+                    }
+                    catch (EndOfStreamException) { }
+                    finally
+                    {
+                        stream.Seek(0, SeekOrigin.Begin);
+                    }
+
+                    if (header?.IsValid ?? false)
+                    {
+                        Logger.WriteLine($"Decompressing {filePath}...");
+
+                        var virtFile = Path.Combine(VirtualFileDir, filePath);
+                        var virtDir = Path.GetDirectoryName(virtFile);
+
+                        Directory.CreateDirectory(virtDir);
+
+                        var startInfo = new ProcessStartInfo(RNCProPackPath, $"u {this.filePath} {virtFile} -i 0x{blob.Data.Instance.Offset:X8}")
+                        {
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            RedirectStandardOutput = false,
+                        };
+
+                        Process.Start(startInfo).WaitForExit();
+
+                        files.Add(filePath, File.OpenRead(virtFile));
+                    }
+                    else
+                    {
+                        files.Add(filePath, stream);
+                    }
 
                     idx++;
                 }
@@ -343,11 +374,30 @@ namespace DATOneArchiver
                     var newTerm = entries[idx].BlobIndex;
                     var subDir = entries[idx].NodeName.Instance.Value;
 
-                    idx = WalkEntries(blobs, entries, idx + 1, newTerm, Path.Combine(dir, subDir), level + 1, debug);
+                    idx = WalkEntries(blobs, entries, idx + 1, newTerm, Path.Combine(dir, subDir));
                 }
             } while (idx < entries.Count && (entries[idx - 1].NodeIndex > 0 && entries[idx - 1].NodeIndex < terminator - 1) || (entries[idx - 1].NodeIndex == 0 && idx - 1 < terminator));
 
             return idx;
+        }
+
+        public void Read()
+        {
+            Logger.WriteLine("Reading archive...");
+
+            var context = new Context(stream, endianess, Encoding.ASCII);
+
+            var datFile = fileIO.Read(context);
+            TTGKey = datFile.TTGKey;
+
+            var table = datFile.TablePointer.Instance;
+
+            var blobs = table.Blobs;
+            var entries = table.Entries;
+
+            WalkEntries(blobs, entries, 1, entries[0].BlobIndex);
+
+            Logger.WriteLine("Read complete!!!");
         }
 
         private bool disposedValue;
@@ -362,6 +412,8 @@ namespace DATOneArchiver
                     {
                         file.Dispose();
                     }
+
+                    stream.Dispose();
                 }
 
                 disposedValue = true;

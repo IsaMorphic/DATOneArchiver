@@ -14,20 +14,18 @@ namespace DATOneArchiver
             get => magic;
             set
             {
-                var bytes = new Span<byte>(BitConverter.GetBytes(value));
+                this.magic = value;
+
+                var bytes = new Span<byte>(BitConverter.GetBytes(this.magic));
                 var magic = bytes.Slice(1, 3); magic.Reverse();
 
-                if (Encoding.ASCII.GetString(magic) != "RNC")
-                {
-                    throw new InvalidOperationException("Incorrect RNC magic!");
-                }
-
-                this.magic = value;
+                IsValid = Encoding.ASCII.GetString(magic) == "RNC";
             }
         }
         private uint magic;
 
         public byte Version { get => BitConverter.GetBytes(magic)[0]; set => magic = (magic & 0xFF) | value; }
+        public bool IsValid { get; private set; }
 
         [StructMember]
         public uint UnpackedLength { get; private set; }

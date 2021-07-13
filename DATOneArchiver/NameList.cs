@@ -18,11 +18,14 @@ namespace DATOneArchiver
         public bool IsTerminator(IStructInstance inst) => false;
 
         [StructMember]
-        [AutoInitialize]
-        public UInt32Pointer<Dummy> EndPtr { get; set; }
+        public uint SectionLength { get; set; }
 
         [StructMember]
         public Collection<NullTerminatingString> Strings { get; set; }
         public long? ItemCount => (Parent as FileTable).NumEntries;
+
+        [StructMember]
+        [AutoInitialize]
+        public NullTerminatingString Signature { get; set; }
     }
 }
