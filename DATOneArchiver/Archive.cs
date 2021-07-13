@@ -62,7 +62,6 @@ namespace DATOneArchiver
             this.endianess = endianess;
         }
 
-
         private class Node
         {
             public string Name { get; }
@@ -178,6 +177,27 @@ namespace DATOneArchiver
             }
         }
 
+        private bool IsRNCStream(Stream stream, out uint unpackedLen)
+        {
+            var ctx = new Context(stream, Endianess.Big, Encoding.ASCII);
+            RNCHeader header = null;
+            try
+            {
+                header = rncIO.Read(ctx);
+                unpackedLen = header.UnpackedLength;
+            }
+            catch (EndOfStreamException)
+            {
+                unpackedLen = 0;
+            }
+            finally
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+            }
+
+            return header?.IsValid ?? false;
+        }
+
         public void Write(uint ttgKey, int fileAlign = 1)
         {
             Logger.WriteLine("Building archive...");
@@ -205,27 +225,13 @@ namespace DATOneArchiver
                 Blob blob;
                 file.Seek(0, SeekOrigin.Begin);
 
-                // RNC check (read header)
-                var ctx = new Context(file, Endianess.Big, Encoding.ASCII);
-
-                RNCHeader header = null;
-                try
-                {
-                    header = rncIO.Read(ctx);
-                }
-                catch (EndOfStreamException) { }
-                finally
-                {
-                    stream.Seek(0, SeekOrigin.Begin);
-                }
-
                 // RNC check (set flags if valid)
-                if (header?.IsValid ?? false)
+                if (IsRNCStream(file, out uint unpackedLen))
                 {
                     blob = new Blob(blobs)
                     {
                         ActualSize = (uint)file.Length,
-                        UncompressedSize = header.UnpackedLength,
+                        UncompressedSize = unpackedLen,
                         CompressFlag = 1,
                     };
                 }
@@ -277,7 +283,7 @@ namespace DATOneArchiver
             table.Names.SectionLength = (uint)(strings.Sum(s => s.Value.Length) + strings.Count + (SIGNATURE.Length + 1));
             table.Names.Signature.Value = SIGNATURE;
 
-            Logger.WriteLine($"Writing archive to {filePath}");
+            Logger.Write($"Writing archive to {filePath}");
 
             fileIO.Write(datFile, context);
 
@@ -312,8 +318,7 @@ namespace DATOneArchiver
 
             context.RewriteUnresolvedReferences();
 
-            Logger.WriteLine("");
-            Logger.WriteLine("Build/write complete!!!");
+            Logger.WriteLine("\nBuild/write complete!!!");
         }
 
         private int WalkEntries(IList<Blob> blobs, IList<Entry> entries, int startIdx, short terminator, string dir = "")
@@ -329,43 +334,7 @@ namespace DATOneArchiver
                     var filePath = Path.Combine(dir, fileName);
 
                     var stream = blob.Data.Instance.Stream;
-                    var ctx = new Context(stream, Endianess.Big, Encoding.ASCII);
-
-                    RNCHeader header = null;
-                    try
-                    {
-                        header = rncIO.Read(ctx);
-                    }
-                    catch (EndOfStreamException) { }
-                    finally
-                    {
-                        stream.Seek(0, SeekOrigin.Begin);
-                    }
-
-                    if (header?.IsValid ?? false)
-                    {
-                        Logger.WriteLine($"Decompressing {filePath}...");
-
-                        var virtFile = Path.Combine(VirtualFileDir, filePath);
-                        var virtDir = Path.GetDirectoryName(virtFile);
-
-                        Directory.CreateDirectory(virtDir);
-
-                        var startInfo = new ProcessStartInfo(RNCProPackPath, $"u {this.filePath} {virtFile} -i 0x{blob.Data.Instance.Offset:X8}")
-                        {
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            RedirectStandardOutput = false,
-                        };
-
-                        Process.Start(startInfo).WaitForExit();
-
-                        files.Add(filePath, File.OpenRead(virtFile));
-                    }
-                    else
-                    {
-                        files.Add(filePath, stream);
-                    }
+                    files.Add(filePath, stream);
 
                     idx++;
                 }
@@ -383,7 +352,7 @@ namespace DATOneArchiver
 
         public void Read()
         {
-            Logger.WriteLine("Reading archive...");
+            Logger.WriteLine("Reading archive file...");
 
             var context = new Context(stream, endianess, Encoding.ASCII);
 
@@ -398,6 +367,57 @@ namespace DATOneArchiver
             WalkEntries(blobs, entries, 1, entries[0].BlobIndex);
 
             Logger.WriteLine("Read complete!!!");
+        }
+
+        public void Extract(string extractDir, bool decompress = true)
+        {
+            Logger.WriteLine($"Extracting archive file \"{filePath}\" to \"{extractDir}\"...");
+
+            foreach (var file in files)
+            {
+                var filePath = Path.Combine(extractDir, file.Key);
+
+                var dir = Path.GetDirectoryName(filePath);
+                Directory.CreateDirectory(dir);
+
+                if (decompress && IsRNCStream(file.Value, out uint _))
+                {
+                    Logger.WriteLine($"Decompressing {file.Key}...");
+
+                    var virtFile = Path.Combine(VirtualFileDir, filePath);
+                    var virtDir = Path.GetDirectoryName(virtFile);
+
+                    Directory.CreateDirectory(virtDir);
+
+                    using (var io = File.Create(virtFile))
+                    {
+                        file.Value.CopyTo(io);
+                    }
+
+                    var startInfo = new ProcessStartInfo(RNCProPackPath, $"u {virtFile} {filePath}")
+                    {
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = false,
+                    };
+
+                    Process.Start(startInfo).WaitForExit();
+                }
+                else
+                {
+                    Logger.WriteLine($"Extracting {file.Key}...");
+                    using var io = File.Create(filePath);
+                    file.Value.CopyTo(io);
+                }
+            }
+
+            if (decompress)
+            {
+                Logger.WriteLine("Cleaning up...");
+                Directory.Delete(VirtualFileDir, true);
+            }
+
+            Logger.WriteLine("Extraction complete!!!");
         }
 
         private bool disposedValue;
