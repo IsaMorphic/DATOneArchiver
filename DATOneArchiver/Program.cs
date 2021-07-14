@@ -42,6 +42,9 @@ namespace DATOneArchiver
         [Verb("modify", HelpText = "Modify existing DAT archive files by adding new files and/or replacing current ones.")]
         private class ModifyOptions : BaseOptions
         {
+            [Option('o', "output-archive", Required = true, HelpText = "The archive file in which to place the patched output.")]
+            public string OutputPath { get; set; }
+
             [Option('p', "patch-dir", Required = true, HelpText = "The directory containing the files to be patched in.\nTo replace files, you must maintain the same relative directory structure as the original DAT.")]
             public string PatchPath { get; set; }
         }
@@ -62,10 +65,11 @@ namespace DATOneArchiver
         private static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.Unicode;
-            Parser.Default.ParseArguments<ListOptions, ExtractOptions, BuildOptions>(args)
+            Parser.Default.ParseArguments<ListOptions, ExtractOptions, BuildOptions, ModifyOptions>(args)
                 .WithParsed<ListOptions>(RunList)
                 .WithParsed<ExtractOptions>(RunExtract)
-                .WithParsed<BuildOptions>(RunBuild);
+                .WithParsed<BuildOptions>(RunBuild)
+                .WithParsed<ModifyOptions>(RunModify);
         }
 
         private static void RunList(ListOptions options)
@@ -92,8 +96,12 @@ namespace DATOneArchiver
         {
             var endianess = endianesses[options.Endianess.ToUpperInvariant()];
 
-            var ttgKeyValid = uint.TryParse(options.TTGKey, out uint ttgKey);
-            if (!ttgKeyValid)
+            uint ttgKey;
+            try
+            {
+                ttgKey = Convert.ToUInt32(options.TTGKey, 16);
+            }
+            catch (FormatException) 
             {
                 Console.WriteLine("Invalid TTG Key format! Please enter in hexadecimal!");
                 return;
@@ -101,6 +109,16 @@ namespace DATOneArchiver
 
             using var archive = new Archive(options.ArchivePath, ArchiveMode.BuildNew, endianess);
             archive.Build(options.DataPath, ttgKey, options.FileAlign);
+        }
+
+        private static void RunModify(ModifyOptions options)
+        {
+            var endianess = endianesses[options.Endianess.ToUpperInvariant()];
+
+            using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, endianess);
+            archive.Read();
+
+            archive.Patch(options.OutputPath, options.PatchPath);
         }
     }
 }

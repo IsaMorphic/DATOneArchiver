@@ -211,8 +211,8 @@ namespace DATOneArchiver
 
             public int CompareTo(Node other)
             {
-                if ((Children == null && other.Children == null) || 
-                    (Children != null && other.Children != null) || 
+                if ((Children == null && other.Children == null) ||
+                    (Children != null && other.Children != null) ||
                     (BUZZ_WORDS.Contains(Name) && BUZZ_WORDS.Contains(other.Name)))
                 {
                     return Name.CompareTo(other.Name);
@@ -500,7 +500,7 @@ namespace DATOneArchiver
 
         public void Build(string dataDir, uint ttgKey, int fileAlign = 1)
         {
-            Logger.WriteLine($"Builidng archive file \"{filePath}\" from files in \"{dataDir}\"...");
+            Logger.WriteLine($"Building archive file \"{filePath}\" from files in \"{dataDir}\"...");
 
             foreach (var fullPath in Directory.EnumerateFiles(dataDir, "*.*", SearchOption.AllDirectories))
             {
@@ -509,6 +509,30 @@ namespace DATOneArchiver
             }
 
             Write(ttgKey, fileAlign);
+        }
+
+        public void Patch(string outputPath, string patchDir)
+        {
+            Logger.WriteLine($"Patching archive file \"{filePath}\" with files in \"{patchDir}\"...");
+
+            using var newArchive = new Archive(outputPath, ArchiveMode.BuildNew, endianess);
+
+            foreach (var fullPath in Directory.EnumerateFiles(patchDir, "*.*", SearchOption.AllDirectories))
+            {
+                var filePath = Path.GetRelativePath(patchDir, fullPath);
+                newArchive.Files.Add(filePath, File.OpenRead(fullPath));
+            }
+
+            foreach (var file in files)
+            {
+                if (!newArchive.Files.ContainsKey(file.Key))
+                {
+                    newArchive.Files.Add(file.Key, file.Value);
+                }
+            }
+
+            int fileAlign = (int)(files.Values.First() as SubStream).AbsoluteOffset;
+            newArchive.Write(TTGKey, fileAlign == 8 ? 1 : fileAlign);
         }
 
         private bool disposedValue;
