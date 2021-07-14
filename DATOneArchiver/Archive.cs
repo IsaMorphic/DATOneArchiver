@@ -62,7 +62,7 @@ namespace DATOneArchiver
             this.endianess = endianess;
         }
 
-        private class Node
+        private class Node : IComparable<Node>
         {
             public string Name { get; }
             public Dictionary<string, Node> Children { get; }
@@ -118,14 +118,48 @@ namespace DATOneArchiver
                 BlobIndex = blobIndex;
             }
 
+            public void PrintNodes(int level = 1, bool isLast = true, HashSet<int> lastLevels = null)
+            {
+                if (lastLevels == null)
+                    lastLevels = new HashSet<int>();
+                else
+                    lastLevels = new HashSet<int>(lastLevels);
+
+                var indent = new char[level * 3];
+                Array.Fill(indent, ' ');
+
+                for (int i = 1; i < level; i++)
+                {
+                    if (!lastLevels.Contains(i))
+                        indent[i * 3] = '\u2502';
+                }
+
+                int idx = (level - 1) * 3;
+                indent[idx + 0] = isLast ? '\u2514' : '\u251C';
+                indent[idx + 1] = '\u2500';
+                indent[idx + 2] = '\u2500';
+
+                Logger.WriteLine(new string(indent) + Name);
+
+                if (Children != null)
+                {
+                    if (isLast) lastLevels.Add(level - 1);
+
+                    int count = 0;
+                    foreach (var child in Children.Values.OrderBy(c => c))
+                    {
+                        child.PrintNodes(level + 1, ++count == Children.Count, lastLevels);
+                    }
+                }
+            }
+
             public int WalkNodes(Collection<Entry> entries, Collection<NullTerminatingString> strings, int startIdx, out int firstIdx)
             {
                 firstIdx = 0;
                 int idx = startIdx;
                 bool isFirstChild = true;
 
-                int count = 0;
-                foreach (var child in Children.Values)
+                foreach (var child in Children.Values.OrderBy(c => c))
                 {
                     var entry = new Entry(entries);
                     entries.Add(entry);
@@ -170,10 +204,31 @@ namespace DATOneArchiver
                         firstIdx = idx + 1;
                         idx = newIdx;
                     }
-                    count++;
                 }
 
                 return idx;
+            }
+
+            public int CompareTo(Node other)
+            {
+                if ((Children == null && other.Children == null) || 
+                    (Children != null && other.Children != null) || 
+                    (BUZZ_WORDS.Contains(Name) && BUZZ_WORDS.Contains(other.Name)))
+                {
+                    return Name.CompareTo(other.Name);
+                }
+                else if (Children == null || BUZZ_WORDS.Contains(other.Name))
+                {
+                    return -1;
+                }
+                else if (other.Children == null || BUZZ_WORDS.Contains(Name))
+                {
+                    return 1;
+                }
+                else
+                {
+                    return 0;
+                }
             }
         }
 
@@ -257,10 +312,16 @@ namespace DATOneArchiver
 
             var root = new Node("");
 
-            short idx = 0;
+            List<Node> nodes = new List<Node>();
             foreach (var file in Files.Keys)
             {
-                root[file].BlobIndex = idx--;
+                nodes.Add(root[file]);
+            }
+
+            int idx = 0;
+            foreach (var node in nodes)
+            {
+                node.BlobIndex = (short)idx--;
             }
 
             var entry = new Entry(entries);
@@ -369,6 +430,20 @@ namespace DATOneArchiver
             Logger.WriteLine("Read complete!!!");
         }
 
+        public void List()
+        {
+            Logger.WriteLine($"TTG Key: 0x{TTGKey:X8}");
+            Logger.WriteLine($"Listing contents of archive file \"{filePath}\"...");
+
+            var root = new Node("<root>");
+            foreach (var file in Files.Keys)
+            {
+                var _ = root[file];
+            }
+
+            root.PrintNodes();
+        }
+
         public void Extract(string extractDir, bool decompress = true)
         {
             Logger.WriteLine($"Extracting archive file \"{filePath}\" to \"{extractDir}\"...");
@@ -414,10 +489,26 @@ namespace DATOneArchiver
             if (decompress)
             {
                 Logger.WriteLine("Cleaning up...");
-                Directory.Delete(VirtualFileDir, true);
+                if (Directory.Exists(VirtualFileDir))
+                {
+                    Directory.Delete(VirtualFileDir, true);
+                }
             }
 
             Logger.WriteLine("Extraction complete!!!");
+        }
+
+        public void Build(string dataDir, uint ttgKey, int fileAlign = 1)
+        {
+            Logger.WriteLine($"Builidng archive file \"{filePath}\" from files in \"{dataDir}\"...");
+
+            foreach (var fullPath in Directory.EnumerateFiles(dataDir, "*.*", SearchOption.AllDirectories))
+            {
+                var filePath = Path.GetRelativePath(dataDir, fullPath);
+                files.Add(filePath, File.OpenRead(fullPath));
+            }
+
+            Write(ttgKey, fileAlign);
         }
 
         private bool disposedValue;

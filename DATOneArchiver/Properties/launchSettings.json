@@ -2,7 +2,7 @@
   "profiles": {
     "DATOneArchiver": {
       "commandName": "Project",
-      "commandLineArgs": "game.dat little"
+      "commandLineArgs": "list -i game.dat"
     }
   }
 }
