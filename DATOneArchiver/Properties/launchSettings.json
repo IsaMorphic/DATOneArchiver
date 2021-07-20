@@ -2,7 +2,7 @@
   "profiles": {
     "DATOneArchiver": {
       "commandName": "Project",
-      "commandLineArgs": "list -i game.dat"
+      "commandLineArgs": "build -f GAME.DAT -g lsw2 -d extracted -a 2048"
     }
   }
 }

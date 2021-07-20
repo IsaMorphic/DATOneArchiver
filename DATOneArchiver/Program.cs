@@ -11,27 +11,39 @@ namespace DATOneArchiver
         private static readonly Dictionary<string, Endianess> endianesses =
             new Dictionary<string, Endianess>
             {
-                { "LITTLE", Endianess.Little },
-                { "BIG", Endianess.Big },
+                { "little", Endianess.Little },
+                { "big", Endianess.Big },
+            };
+
+        private static readonly Dictionary<string, Game> games =
+            new Dictionary<string, Game>
+            {
+                { "lsw1", Game.LSW1 },
+                { "lsw2", Game.LSW2 },
             };
 
         private class BaseOptions
         {
-            [Option('i', "input-archive", Required = true, HelpText = "The DAT archive to extract files from.")]
+            [Option('f', "archive-file", Required = true, HelpText = "The DAT archive to operate on.")]
             public string ArchivePath { get; set; }
 
-            [Option('e', "endian", Default = "little", HelpText = "The endianess of the input file.")]
+            [Option('e', "endian", Default = "little", HelpText = "The endianess of the archive file.")]
             public string Endianess { get; set; }
         }
 
         [Verb("list", HelpText = "List the contents of existing DAT archives without extracting them.")]
         private class ListOptions : BaseOptions
         {
+            [Option('d', "list-dir", Default = "", HelpText = "The path of a specific subdirectory within the archive to traverse and print (rather than the whole thing).")]
+            public string ListPath { get; set; }
         }
 
         [Verb("extract", HelpText = "Extract the contents of existing DAT archives with optional decompression.")]
         private class ExtractOptions : BaseOptions
         {
+            [Option('g', "game", Required = true, HelpText = "The game of origin for the input file. Can be lsw1 or lsw2.")]
+            public string Game { get; set; }
+
             [Option('o', "output-dir", Required = true, HelpText = "The directory in which the extraction output is to be placed.")]
             public string ExtractPath { get; set; }
 
@@ -42,8 +54,8 @@ namespace DATOneArchiver
         [Verb("modify", HelpText = "Modify existing DAT archive files by adding new files and/or replacing current ones.")]
         private class ModifyOptions : BaseOptions
         {
-            [Option('o', "output-archive", Required = true, HelpText = "The archive file in which to place the patched output.")]
-            public string OutputPath { get; set; }
+            [Option('g', "game", Required = true, HelpText = "The game of origin for the input file. Can be lsw1 or lsw2.")]
+            public string Game { get; set; }
 
             [Option('p', "patch-dir", Required = true, HelpText = "The directory containing the files to be patched in.\nTo replace files, you must maintain the same relative directory structure as the original DAT.")]
             public string PatchPath { get; set; }
@@ -52,11 +64,11 @@ namespace DATOneArchiver
         [Verb("build", HelpText = "Build a brand new TT Games DAT archive file.")]
         private class BuildOptions : BaseOptions
         {
+            [Option('g', "game", Required = true, HelpText = "The game of origin for the input file. Can be lsw1 or lsw2.")]
+            public string Game { get; set; }
+
             [Option('d', "data-dir", Required = true, HelpText = "The directory containing the files to be packed.")]
             public string DataPath { get; set; }
-
-            [Option('k', "ttg-key", Required = true, HelpText = "The TTG Key for the game this archive is intended to be used with.")]
-            public string TTGKey { get; set; }
 
             [Option('a', "align", Default = 1, HelpText = "The alignment to enforce for embedded file data. Setting to 1 disables any alignment control.")]
             public int FileAlign { get; set; }
@@ -74,19 +86,20 @@ namespace DATOneArchiver
 
         private static void RunList(ListOptions options)
         {
-            var endianess = endianesses[options.Endianess.ToUpperInvariant()];
+            var endianess = endianesses[options.Endianess.ToLowerInvariant()];
 
-            using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, endianess);
+            using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, Game.LSW1, endianess);
             archive.Read();
 
-            archive.List();
+            archive.List(options.ListPath);
         }
 
         private static void RunExtract(ExtractOptions options)
         {
-            var endianess = endianesses[options.Endianess.ToUpperInvariant()];
+            var game = games[options.Game.ToLowerInvariant()];
+            var endianess = endianesses[options.Endianess.ToLowerInvariant()];
 
-            using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, endianess);
+            using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, game, endianess);
             archive.Read();
 
             archive.Extract(options.ExtractPath, options.Decompress);
@@ -94,31 +107,22 @@ namespace DATOneArchiver
 
         private static void RunBuild(BuildOptions options)
         {
-            var endianess = endianesses[options.Endianess.ToUpperInvariant()];
+            var game = games[options.Game.ToLowerInvariant()];
+            var endianess = endianesses[options.Endianess.ToLowerInvariant()];
 
-            uint ttgKey;
-            try
-            {
-                ttgKey = Convert.ToUInt32(options.TTGKey, 16);
-            }
-            catch (FormatException) 
-            {
-                Console.WriteLine("Invalid TTG Key format! Please enter in hexadecimal!");
-                return;
-            }
-
-            using var archive = new Archive(options.ArchivePath, ArchiveMode.BuildNew, endianess);
-            archive.Build(options.DataPath, ttgKey, options.FileAlign);
+            using var archive = new Archive(options.ArchivePath, ArchiveMode.BuildNew, game, endianess);
+            archive.Build(options.DataPath, options.FileAlign);
         }
 
         private static void RunModify(ModifyOptions options)
         {
-            var endianess = endianesses[options.Endianess.ToUpperInvariant()];
+            var game = games[options.Game.ToLowerInvariant()];
+            var endianess = endianesses[options.Endianess.ToLowerInvariant()];
 
-            using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, endianess);
+            using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, game, endianess);
             archive.Read();
 
-            archive.Patch(options.OutputPath, options.PatchPath);
+            archive.Patch(options.PatchPath);
         }
     }
 }

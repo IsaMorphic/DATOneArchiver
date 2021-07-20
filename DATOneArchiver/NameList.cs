@@ -18,7 +18,8 @@ namespace DATOneArchiver
         public bool IsTerminator(IStructInstance inst) => false;
 
         [StructMember]
-        public uint SectionLength { get; set; }
+        [AutoInitialize]
+        public UInt32Pointer<NullTerminatingString> SectionLength { get; set; }
 
         [StructMember]
         public Collection<NullTerminatingString> Strings { get; set; }
