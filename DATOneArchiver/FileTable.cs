@@ -1,7 +1,6 @@
 ﻿using QuesoStruct;
 using QuesoStruct.Types.Collections;
 using QuesoStruct.Types.Pointers;
-using QuesoStruct.Types.Primitives;
 
 namespace DATOneArchiver
 {

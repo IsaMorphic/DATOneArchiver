@@ -4,7 +4,6 @@ using QuesoStruct.Types.Primitives;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -36,8 +35,8 @@ namespace DATOneArchiver
         private static readonly ISerializer<Bytes> bytesIO;
         private static readonly ISerializer<RNCHeader> rncIO;
 
-        public static string RNCProPackPath { get; set; } = "./propack/rnc_propack.exe";
-        public static string VirtualFileDir { get; set; } = "./_virt";
+        public static string RNCProPackPath { get; set; } = ".\\propack\\rnc_propack.exe";
+        public static string VirtualFileDir { get; set; } = ".\\_virt";
 
         public static ILogger Logger { get; set; } = new ConsoleLogger();
 
@@ -562,36 +561,44 @@ namespace DATOneArchiver
             Write(fileAlign);
         }
 
-        public Archive Patch(string patchDir)
+        public void Patch(string patchDir)
         {
             using var self = this;
 
             Logger.WriteLine($"Patching archive file \"{filePath}\" with files in \"{patchDir}\"...");
 
+            Directory.CreateDirectory(VirtualFileDir);
+
             var outputPath = Path.Combine(VirtualFileDir, "_.DAT");
-            var newArchive = new Archive(outputPath, ArchiveMode.BuildNew, game, endianess);
-
-            foreach (var fullPath in Directory.EnumerateFiles(patchDir, "*.*", SearchOption.AllDirectories))
+            using (var newArchive = new Archive(outputPath, ArchiveMode.BuildNew, game, endianess))
             {
-                var filePath = Path.GetRelativePath(patchDir, fullPath);
-                newArchive.Files.Add(filePath, File.OpenRead(fullPath));
-            }
-
-            foreach (var file in files)
-            {
-                if (!newArchive.Files.ContainsKey(file.Key))
+                foreach (var fullPath in Directory.EnumerateFiles(patchDir, "*.*", SearchOption.AllDirectories))
                 {
-                    newArchive.Files.Add(file.Key, file.Value);
+                    var filePath = Path.GetRelativePath(patchDir, fullPath);
+                    newArchive.Files.Add(filePath, File.OpenRead(fullPath));
                 }
+
+                foreach (var file in files)
+                {
+                    if (!newArchive.Files.ContainsKey(file.Key))
+                    {
+                        newArchive.Files.Add(file.Key, file.Value);
+                    }
+                }
+
+                int fileAlign = (int)(files.Values.First() as SubStream).AbsoluteOffset;
+                newArchive.Write(fileAlign == 8 ? 1 : fileAlign);
             }
 
-            int fileAlign = (int)(files.Values.First() as SubStream).AbsoluteOffset;
-            newArchive.Write(fileAlign == 8 ? 1 : fileAlign);
+            Logger.WriteLine("Cleaning up...");
 
             stream.Dispose();
             File.Move(outputPath, filePath, true);
 
-            return newArchive;
+            if (Directory.Exists(VirtualFileDir))
+            {
+                Directory.Delete(VirtualFileDir, true);
+            }
         }
 
         private bool disposedValue;
