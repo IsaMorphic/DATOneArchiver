@@ -59,6 +59,9 @@ namespace DATOneArchiver
 
             [Option('p', "patch-dir", Required = true, HelpText = "The directory containing the files to be patched in.\nTo replace files, you must maintain the same relative directory structure as the original DAT.")]
             public string PatchPath { get; set; }
+
+            [Option('o', "output-file", HelpText = "Optional path of output file. The input archive will be preserved and a patched copy will be created at the specified path, or will be overwritten otherwise.")]
+            public string OutputPath { get; set; }
         }
 
         [Verb("build", HelpText = "Build a brand new TT Games DAT archive file.")]
@@ -122,7 +125,7 @@ namespace DATOneArchiver
             using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, game, endianess);
             archive.Read();
 
-            archive.Patch(options.PatchPath);
+            archive.Patch(options.PatchPath, options.OutputPath);
         }
     }
 }

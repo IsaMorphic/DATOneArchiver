@@ -200,7 +200,7 @@ namespace DATOneArchiver
                         if (!isFirstChild)
                         {
                             if ((game == Game.LSW1 && BUZZ_WORDS.Contains(child.Name.ToLowerInvariant())) ||
-                                (game == Game.LSW2 && Children.Values.First(c => c.Children != null) == child))
+                                (game == Game.LSW2 && Children.Values.OrderBy(c => c).First(c => c.Children != null) == child))
                                 entry.NodeIndex = (short)idx;
                             else
                                 entry.NodeIndex = (short)firstIdx;
@@ -561,16 +561,17 @@ namespace DATOneArchiver
             Write(fileAlign);
         }
 
-        public void Patch(string patchDir)
+        public void Patch(string patchDir, string outputPath = null)
         {
-            using var self = this;
-
             Logger.WriteLine($"Patching archive file \"{filePath}\" with files in \"{patchDir}\"...");
 
-            Directory.CreateDirectory(VirtualFileDir);
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                outputPath = null;
+                Directory.CreateDirectory(VirtualFileDir);
+            }
 
-            var outputPath = Path.Combine(VirtualFileDir, "_.DAT");
-            using (var newArchive = new Archive(outputPath, ArchiveMode.BuildNew, game, endianess))
+            using (var newArchive = new Archive(outputPath ?? Path.Combine(VirtualFileDir, "_.DAT"), ArchiveMode.BuildNew, game, endianess))
             {
                 foreach (var fullPath in Directory.EnumerateFiles(patchDir, "*.*", SearchOption.AllDirectories))
                 {
@@ -590,13 +591,15 @@ namespace DATOneArchiver
                 newArchive.Write(fileAlign == 8 ? 1 : fileAlign);
             }
 
-            Logger.WriteLine("Cleaning up...");
-
-            stream.Dispose();
-            File.Move(outputPath, filePath, true);
-
-            if (Directory.Exists(VirtualFileDir))
+            if (outputPath == null)
             {
+                using var self = this;
+
+                Logger.WriteLine("Cleaning up...");
+
+                stream.Dispose();
+                File.Move(outputPath, filePath, true);
+
                 Directory.Delete(VirtualFileDir, true);
             }
         }
