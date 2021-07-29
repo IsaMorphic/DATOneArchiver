@@ -1,7 +1,9 @@
 ﻿using CommandLine;
+using GlobExpressions;
 using QuesoStruct;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
 namespace DATOneArchiver
@@ -102,10 +104,16 @@ namespace DATOneArchiver
             var game = games[options.Game.ToLowerInvariant()];
             var endianess = endianesses[options.Endianess.ToLowerInvariant()];
 
-            using var archive = new Archive(options.ArchivePath, ArchiveMode.ReadOnly, game, endianess);
-            archive.Read();
+            var dir = Path.GetDirectoryName(options.ArchivePath);
+            var glob = Path.GetFileName(options.ArchivePath);
 
-            archive.Extract(options.ExtractPath, options.Decompress);
+            foreach (var path in Glob.Files(dir == "" ? "." : dir, glob))
+            {
+                using var archive = new Archive(path, ArchiveMode.ReadOnly, game, endianess);
+                archive.Read();
+
+                archive.Extract(options.ExtractPath, options.Decompress);
+            }
         }
 
         private static void RunBuild(BuildOptions options)
