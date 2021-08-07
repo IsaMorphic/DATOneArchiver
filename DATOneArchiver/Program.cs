@@ -107,8 +107,10 @@ namespace DATOneArchiver
             var dir = Path.GetDirectoryName(options.ArchivePath);
             var glob = Path.GetFileName(options.ArchivePath);
 
-            foreach (var path in Glob.Files(dir == "" ? "." : dir, glob))
+            foreach (var fileName in Glob.Files(dir == "" ? "." : dir, glob))
             {
+                var path = Path.Combine(dir, fileName);
+
                 using var archive = new Archive(path, ArchiveMode.ReadOnly, game, endianess);
                 archive.Read();
 
