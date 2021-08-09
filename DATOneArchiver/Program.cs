@@ -43,9 +43,6 @@ namespace DATOneArchiver
         [Verb("extract", HelpText = "Extract the contents of existing DAT archives with optional decompression.")]
         private class ExtractOptions : BaseOptions
         {
-            [Option('g', "game", Required = true, HelpText = "The game of origin for the input file. Can be lsw1 or lsw2.")]
-            public string Game { get; set; }
-
             [Option('o', "output-dir", Required = true, HelpText = "The directory in which the extraction output is to be placed.")]
             public string ExtractPath { get; set; }
 
@@ -101,7 +98,6 @@ namespace DATOneArchiver
 
         private static void RunExtract(ExtractOptions options)
         {
-            var game = games[options.Game.ToLowerInvariant()];
             var endianess = endianesses[options.Endianess.ToLowerInvariant()];
 
             var dir = Path.GetDirectoryName(options.ArchivePath);
@@ -111,7 +107,7 @@ namespace DATOneArchiver
             {
                 var path = Path.Combine(dir, fileName);
 
-                using var archive = new Archive(path, ArchiveMode.ReadOnly, game, endianess);
+                using var archive = new Archive(path, ArchiveMode.ReadOnly, Game.LSW1, endianess);
                 archive.Read();
 
                 archive.Extract(options.ExtractPath, options.Decompress);
