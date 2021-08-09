@@ -6,7 +6,7 @@ Thankfully, a long time ago on a computer no more than half the circumference of
 
 However, that last part has severe limitations.  To modify a file within a DAT archive using **QuickBMS**:
 
-1. The file must already exist within the DAT archive.  In other words, if `fart.txt` does not exist in `POTTY_HUMOR.DAT`, you're out of luck; It cannot be added.  
+1. The file must already exist within the DAT archive.  In other words, if `fart.txt` does not already exist in `POTTY_HUMOR.DAT`, you're out of luck; It cannot be added.  
 2. The new version must be either smaller than or the same size as the current in-archive data
 3. You must be lucky (somewhat). **QuickBMS**, like all other software, isn't perfect.  Bugs exist that can and will screw stuff up.  
 
@@ -130,8 +130,11 @@ Parameters:
 
 **This project is nowhere near done!!!** If you have any RE experience or knowledge that you can contribute to this project (and the time), *DEW IT!!*
 
-Here's a laundry list of missing features:
+Here's a laundry list of missing features/information:
 
-* Graphical User Interface
+* Graphical user interface
 * Support for more games and format variations (specifically TCS, LSW3 & TFA)
 * Support for more compression methods
+* Hardware and emulation tests on the various versions of supported games.  
+  *Open an issue if you happen to do some testing!*
+
