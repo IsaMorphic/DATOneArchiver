@@ -19,7 +19,7 @@ However, that last part has severe limitations.  To modify a file within a DAT a
 * Lego Star Wars: The Video Game (**PC**, Mac, **PS2**, Xbox, GameCube)
 * Lego Star Wars II: The Original Trilogy (PC, Mac, **PS2**, Xbox, GameCube)
 
-Platforms that have been tested and confirmed working are **bolded** above.  However, theoretically all of those listed should work.  See **Help Wanted** for info on how you can help fill in the blanks.  
+Platforms that have been tested and confirmed working are **bolded** above.  However, theoretically all of those listed should work.  See [Help Wanted](#help-wanted) for info on how you can help fill in the blanks.  
 
 ## How get?
 
@@ -87,7 +87,7 @@ Parameters:
 * `-f` (required): Path to an archive file the user desires to extract the contents of.  Wildcards are allowed.
 
 * `-o` (required): Path of a directory to create and extract the archive data to.  
-* `-c` (optional): If specified, signals **DATOneArchiver** to decompress any compressed files it finds during extraction (if the compression scheme is supported.  See **Help Wanted**).  Otherwise, all files will be extracted in their raw, compressed form.  
+* `-c` (optional): If specified, signals **DATOneArchiver** to decompress any compressed files it finds during extraction (if the compression scheme is supported.  See [Help Wanted](#help-wanted)).  Otherwise, all files will be extracted in their raw, compressed form.  
 * `-e` (optional): Endianness of the archive file.  Value must be either `little` or `big`.  Defaults to `little` if left unspecified.
 
 ### To Modify/Add to Contents
@@ -124,7 +124,7 @@ Parameters:
 
 **Questions & Problems:** Join https://discord.gg/ttlegomods.  I'm an active member/moderator of the server and we'd love to help you if you're curious or if you can't seem to figure it out.  Make sure that you give proper context regarding your issue, it makes everybody's life easier.  
 
-**Feedback:** If you have any technical feedback to offer, open an issue on this here repo.  
+**Feedback:** If you have any technical feedback to offer, [open an issue](../../issues) on this here repo.  
 
 ## Help Wanted
 
@@ -133,8 +133,8 @@ Parameters:
 Here's a laundry list of missing features/information:
 
 * Graphical user interface
-* Support for more games and format variations (specifically TCS, LSW3 & TFA)
-* Support for more compression methods
+* Support for more games and format variations (specifically TCS, LSW3, TFA, and non LSW cousins)
+* Support for more compression methods (LZ2K, ZLIB, etc)
 * Hardware and emulation tests on the various versions of supported games.  
-  *Open an issue if you happen to do some testing!*
+  [Open an issue](../../issues) if you happen to do some testing!
 
