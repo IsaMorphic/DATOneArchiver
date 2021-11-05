@@ -17,7 +17,7 @@ However, that last part has severe limitations.  To modify a file within a DAT a
 **DATOneArchiver** in it's current state (v1.0) is a complete toolset for extracting, modifying, and creating TT Games DAT archive files for these games:
 
 * Lego Star Wars: The Video Game (**PC**, Mac, **PS2**, Xbox, GameCube)
-* Lego Star Wars II: The Original Trilogy (PC, Mac, **PS2**, Xbox, GameCube)
+* Lego Star Wars II: The Original Trilogy (PC, Mac, **PS2**, **PSP** (thanks linterni!), Xbox, GameCube)
 
 Platforms that have been tested and confirmed working are **bolded** above.  However, theoretically all of those listed should work.  See [Help Wanted](#help-wanted) for info on how you can help fill in the blanks.  
 
@@ -71,8 +71,6 @@ Parameters:
 * `-e` (optional): Endianness of the archive file.  Value must be either `little` or `big`.  Defaults to `little` if left unspecified.
 
 * `-d` (optional): Path of directory/subdirectory within the archive file to list the contents of.  Useful for making output less verbose in cases where the user is only interested in listing a portion of the contents.  Entire archive tree is printed if left unspecified.  
-
-Expected behavior: 
 
 Outputs "ASCII art" file tree of DAT archive contents; similar to the `tree` command from Windows/MS-DOS.  
 
