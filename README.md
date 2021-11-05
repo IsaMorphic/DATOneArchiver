@@ -1,6 +1,6 @@
 # DATOneArchiver
 
-For as long as the [TT Games Modding Community](https://discord.gg/ttlegomods) has existed, so has a **big** problem.  The majority of the games require their data to be bundled inside of **opaque**, **proprietary**, and **ugly** archive files known none-other as **DAT files** (.dat is the extension, short for "data" of course.  Very creative TT devs... 🙄).  
+For as long as the [TT Games Modding Community](https://discord.gg/9gYXPka) has existed, so has a **big** problem.  The majority of the games require their data to be bundled inside of **opaque**, **proprietary**, and **ugly** archive files known none-other as **DAT files** (.dat is the extension, short for "data" of course.  Very creative TT devs... 🙄).  
 
 Thankfully, a long time ago on a computer no more than half the circumference of Earth away, a clever programmer known as **Luigi "Aluigi" Auriemma** took the time and energy to reverse engineer the **many variations** *(more info on that later)* of the DAT file format to the point that their data can be extracted, decompressed, and, under some circumstances, modified on a per file basis using a tool of his own design named **[QuickBMS](http://aluigi.altervista.org/quickbms.htm)**.  
 
@@ -120,7 +120,7 @@ Parameters:
 
 ## Questions? Problems? Feedback?
 
-**Questions & Problems:** Join https://discord.gg/ttlegomods.  I'm an active member/moderator of the server and we'd love to help you if you're curious or if you can't seem to figure it out.  Make sure that you give proper context regarding your issue, it makes everybody's life easier.  
+**Questions & Problems:** Join https://discord.gg/9gYXPka.  I'm an active member/moderator of the server and we'd love to help you if you're curious or if you can't seem to figure it out.  Make sure that you give proper context regarding your issue, it makes everybody's life easier.  
 
 **Feedback:** If you have any technical feedback to offer, [open an issue](../../issues) on this here repo.  
 
