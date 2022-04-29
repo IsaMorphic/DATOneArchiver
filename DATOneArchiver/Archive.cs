@@ -54,8 +54,9 @@ namespace DATOneArchiver
         public static ILogger Logger { get; set; } = new ConsoleLogger();
 
         private readonly string filePath;
-        private readonly Context context;
+        private readonly Stream stream;
 
+        private readonly Endianess endianess;
         private readonly Game game;
 
         static Archive()
@@ -70,10 +71,11 @@ namespace DATOneArchiver
         {
             this.filePath = filePath;
             if (mode == ArchiveMode.BuildNew)
-                context = new Context(File.Create(this.filePath), endianess, Encoding.ASCII);
+                stream = File.Create(this.filePath);
             else
-                context = new Context(File.Open(this.filePath, FileMode.Open), endianess, Encoding.ASCII);
+                stream = File.Open(this.filePath, FileMode.Open);
 
+            this.endianess = endianess;
             this.game = game;
 
             RootDirectory = new Node("");
@@ -103,6 +105,8 @@ namespace DATOneArchiver
         {
             Logger.WriteLine("Reading archive file...");
 
+            var context = new Context(stream, endianess, Encoding.ASCII);
+
             var datFile = fileIO.Read(context);
             var table = datFile.Table.Pointer.Instance;
 
@@ -118,8 +122,9 @@ namespace DATOneArchiver
         {
             Logger.WriteLine("Building archive...");
 
-            var datFile = new DATFile();
+            var context = new Context(stream, endianess, Encoding.ASCII);
 
+            var datFile = new DATFile();
             var table = new FileTable(datFile)
             {
                 Checksum = uint.MaxValue
@@ -273,7 +278,7 @@ namespace DATOneArchiver
             {
                 if (disposing)
                 {
-                    context.Stream.Dispose();
+                    stream.Dispose();
                 }
 
                 disposedValue = true;

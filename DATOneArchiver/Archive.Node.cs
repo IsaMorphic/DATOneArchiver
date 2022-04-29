@@ -35,7 +35,7 @@ namespace DATOneArchiver
 
             public Stream Stream { get; set; }
 
-            public Node this[string path]
+            public Node this[string path, bool dir = false]
             {
                 get
                 {
@@ -52,7 +52,7 @@ namespace DATOneArchiver
                         else
                         {
                             Node node;
-                            if (i == tokens.Length - 1)
+                            if (!dir && i == tokens.Length - 1)
                                 node = new Node(token, null);
                             else
                                 node = new Node(token);
