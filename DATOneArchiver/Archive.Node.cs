@@ -31,39 +31,43 @@ namespace DATOneArchiver
             public string Name { get; }
             public Dictionary<string, Node> Children { get; }
 
+            public bool ShouldDelete { get; set; }
+
             public short? BlobIndex { get; set; }
 
             public Stream Stream { get; set; }
 
-            public Node this[string path, bool dir = false]
+            public Node Get(string path, bool autoCreate = true, bool dir = false)
             {
-                get
+                var tokens = Path.TrimEndingDirectorySeparator(path.ToLowerInvariant())
+                    .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+
+                var current = this;
+                for (int i = 0; i < tokens.Length; i++)
                 {
-                    var tokens = Path.TrimEndingDirectorySeparator(path)
-                        .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+                    var token = tokens[i];
 
-                    var current = this;
-                    for (int i = 0; i < tokens.Length; i++)
+                    if (current.Children.ContainsKey(token))
+                        current = current.Children[token];
+                    else if (autoCreate)
                     {
-                        var token = tokens[i];
-
-                        if (current.Children.ContainsKey(token))
-                            current = current.Children[token];
+                        Node node;
+                        if (!dir && i == tokens.Length - 1)
+                            node = new Node(token, null);
                         else
-                        {
-                            Node node;
-                            if (!dir && i == tokens.Length - 1)
-                                node = new Node(token, null);
-                            else
-                                node = new Node(token);
+                            node = new Node(token);
 
-                            current.Children.Add(token, node);
-                            current = node;
-                        }
+                        current.Children.Add(token, node);
+                        current = node;
                     }
-
-                    return current;
+                    else
+                    {
+                        current = null;
+                        break;
+                    }
                 }
+
+                return current;
             }
 
             public Node()

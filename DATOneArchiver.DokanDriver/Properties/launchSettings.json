@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DATOneArchiver.DokanDriver": {
+      "commandName": "Project",
+      "commandLineArgs": "GAME.DAT"
+    }
+  }
+}

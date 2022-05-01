@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DokanNet;
+using System;
 
 namespace DATOneArchiver.DokanDriver
 {
@@ -6,7 +7,12 @@ namespace DATOneArchiver.DokanDriver
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            var archive = new Archive(args[0], ArchiveMode.ReadWrite, Game.LSW1, QuesoStruct.Endianess.Little, 2048);
+            archive.Read();
+
+            Dokan.Init();
+            new ArchiveOperations(archive).Mount("H", DokanOptions.RemovableDrive, true);
+            Dokan.Shutdown();
         }
     }
 }

@@ -49,15 +49,16 @@ namespace DATOneArchiver
         private static readonly ISerializer<Bytes> bytesIO;
         private static readonly ISerializer<RNCHeader> rncIO;
 
-        public Node RootDirectory { get; set; }
-
         public static ILogger Logger { get; set; } = new ConsoleLogger();
 
-        private readonly string filePath;
-        private readonly Stream stream;
+        public Node Root { get; set; }
+        public string FilePath { get; }
 
-        private readonly Endianess endianess;
-        private readonly Game game;
+        public Endianess Endianess { get; set; }
+        public Game Game { get; set; }
+        public int FileAlign { get; }
+
+        private readonly Stream stream;
 
         static Archive()
         {
@@ -67,18 +68,20 @@ namespace DATOneArchiver
             rncIO = Serializers.Get<RNCHeader>();
         }
 
-        public Archive(string filePath, ArchiveMode mode, Game game, Endianess endianess)
+        public Archive(string filePath, ArchiveMode mode, Game game, Endianess endianess, int fileAlign = 1)
         {
-            this.filePath = filePath;
+            FilePath = filePath;
             if (mode == ArchiveMode.BuildNew)
-                stream = File.Create(this.filePath);
+                stream = File.Create(FilePath);
             else
-                stream = File.Open(this.filePath, FileMode.Open);
+                stream = File.Open(FilePath, FileMode.Open);
 
-            this.endianess = endianess;
-            this.game = game;
+            Endianess = endianess;
+            Game = game;
+            
+            FileAlign = fileAlign;
 
-            RootDirectory = new Node("");
+            Root = new Node("");
         }
 
         private bool IsRNCStream(Stream stream, out uint unpackedLen)
@@ -105,7 +108,7 @@ namespace DATOneArchiver
         {
             Logger.WriteLine("Reading archive file...");
 
-            var context = new Context(stream, endianess, Encoding.ASCII);
+            var context = new Context(stream, Endianess, Encoding.ASCII);
 
             var datFile = fileIO.Read(context);
             var table = datFile.Table.Pointer.Instance;
@@ -118,11 +121,11 @@ namespace DATOneArchiver
             Logger.WriteLine("Read complete!!!");
         }
 
-        public void Rebuild(bool update = false, int fileAlign = 1)
+        public void Rebuild()
         {
             Logger.WriteLine("Building archive...");
 
-            var context = new Context(stream, endianess, Encoding.ASCII);
+            var context = new Context(stream, Endianess, Encoding.ASCII);
 
             var datFile = new DATFile();
             var table = new FileTable(datFile)
@@ -138,12 +141,12 @@ namespace DATOneArchiver
             var entry = new Entry(entries);
             entries.Add(entry);
 
-            var name = new NullTerminatingString(entry) { Value = RootDirectory.Name };
+            var name = new NullTerminatingString(entry) { Value = Root.Name };
             strings.Add(name);
 
             int blobIdx = 0;
             var nodes = new SortedList<int, Node>();
-            RootDirectory.WalkNodes(game, nodes, entries, strings, 0, ref blobIdx, out int outIdx);
+            Root.WalkNodes(Game, nodes, entries, strings, 0, ref blobIdx, out int outIdx);
 
             entry.BlobIndex = (short)outIdx;
 
@@ -182,7 +185,7 @@ namespace DATOneArchiver
                     };
                 }
 
-                var inst = new Bytes(blob) { Stream = (file is SubStream == update) ? null : file };
+                var inst = new Bytes(blob) { Stream = file };
 
                 bytes.Add(inst);
                 blobs.Add(blob);
@@ -191,28 +194,25 @@ namespace DATOneArchiver
             table.NumBlobs = (uint)blobs.Count;
             table.Blobs = blobs;
 
-            if (update == false)
+            Logger.Write($"Writing archive to {FilePath}");
+
+            fileIO.Write(datFile, context);
+
+            long offset = FileAlign == 1 ? 8 : FileAlign;
+            foreach (var x in nodes.Values.Zip(bytes, (n, b) => new { node = n, data = b }))
             {
-                Logger.Write($"Writing archive to {filePath}");
+                Logger.Write(".");
 
-                fileIO.Write(datFile, context);
+                x.data.Offset = offset;
+                bytesIO.Write(x.data, context);
 
-                long offset = fileAlign == 1 ? 8 : fileAlign;
-                foreach (var x in nodes.Values.Zip(bytes, (n, b) => new { node = n, data = b }))
-                {
-                    Logger.Write(".");
+                x.node.Stream = x.data.Stream;
 
-                    x.data.Offset = offset;
-                    bytesIO.Write(x.data, context);
-
-                    x.node.Stream = x.data.Stream;
-
-                    var length = x.data.Stream.Length;
-                    if ((offset + length) % fileAlign == 0)
-                        offset += length;
-                    else
-                        offset = ((offset + length) / fileAlign + 1) * fileAlign;
-                }
+                var length = x.data.Stream.Length;
+                if ((offset + length) % FileAlign == 0)
+                    offset += length;
+                else
+                    offset = ((offset + length) / FileAlign + 1) * FileAlign;
             }
 
             tableIO.Write(table, context);
@@ -251,7 +251,7 @@ namespace DATOneArchiver
 
                     var stream = blob.Data.Instance.Stream;
 
-                    var fileNode = RootDirectory[filePath];
+                    var fileNode = Root.Get(filePath);
 
                     fileNode.Stream = stream;
                     fileNode.BlobIndex = entries[idx].BlobIndex;
