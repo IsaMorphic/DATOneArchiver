@@ -22,6 +22,7 @@ using QuesoStruct;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 
 namespace DATOneArchiver.DokanDriver
 {
@@ -67,20 +68,35 @@ namespace DATOneArchiver.DokanDriver
 
         private static void RunMount(MountOptions options)
         {
-            Dokan.Init();
-
             var archive = new Archive(
-                options.ArchivePath, ArchiveMode.ReadWrite, 
-                games[options.Game.ToLowerInvariant()], 
-                endianesses[options.Endianess.ToLowerInvariant()], 
+                options.ArchivePath, ArchiveMode.ReadWrite,
+                games[options.Game.ToLowerInvariant()],
+                endianesses[options.Endianess.ToLowerInvariant()],
                 options.FileAlign
                 );
-
             archive.Read();
 
-            new ArchiveOperations(archive).Mount(options.MountPoint, DokanOptions.RemovableDrive, true);
+            Console.WriteLine("Mounting filesystem...");
 
-            Dokan.Shutdown();
+            var dokan = new Dokan(new DokanNet.Logging.NullLogger());
+            void OnCancel(object sender, ConsoleCancelEventArgs e)
+            {
+                e.Cancel = true;
+                Console.WriteLine("Recieved unmount request...");
+
+                dokan.RemoveMountPoint(options.MountPoint);
+                Console.WriteLine("Unmount successful");
+            }
+            Console.CancelKeyPress += OnCancel;
+
+            var ops = new ArchiveOperations(archive);
+            var instance = new DokanInstanceBuilder(dokan)
+                .ConfigureOptions(opt =>
+                {
+                    opt.MountPoint = options.MountPoint;
+                }).Build(ops);
+
+            while (!ops.IsCompleted) Thread.Sleep(1000);
         }
     }
 }

@@ -16,6 +16,7 @@
 
 using DokanNet;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -26,13 +27,15 @@ namespace DATOneArchiver.DokanDriver
 {
     internal class ArchiveOperations : IDokanOperations
     {
+        public bool IsCompleted { get; private set; }
+
         private readonly Archive archive;
-        private readonly Dictionary<string, FileStream> virt;
+        private readonly ConcurrentDictionary<string, FileStream> virt;
 
         public ArchiveOperations(Archive archive)
         {
             this.archive = archive;
-            virt = new Dictionary<string, FileStream>();
+            virt = new ConcurrentDictionary<string, FileStream>();
         }
 
         private string GetVirtPath(string fileName)
@@ -136,29 +139,32 @@ namespace DATOneArchiver.DokanDriver
                         node = archive.Root.Get(filePath);
                     }
 
-                    if (virt.ContainsKey(filePath)) 
+                    if (virt.ContainsKey(filePath))
                     {
                         info.Context = virt[filePath];
                     }
-                    else 
+                    else
                     {
-                        var path = GetVirtPath(filePath);
-                        var dir = Path.GetDirectoryName(path);
-
-                        if (!Directory.Exists(dir))
+                        lock (archive)
                         {
-                            Directory.CreateDirectory(dir);
+                            var path = GetVirtPath(filePath);
+                            var dir = Path.GetDirectoryName(path);
+
+                            if (!Directory.Exists(dir))
+                            {
+                                Directory.CreateDirectory(dir);
+                            }
+
+                            var stream = File.Create(GetVirtPath(filePath));
+
+                            node.Stream?.CopyTo(stream);
+                            node.Stream?.Seek(0, SeekOrigin.Begin);
+
+                            virt.TryAdd(filePath, stream);
+                            node.Stream = stream;
+
+                            info.Context = stream;
                         }
-
-                        var stream = File.Create(GetVirtPath(filePath));
-
-                        node.Stream?.CopyTo(stream);
-                        node.Stream?.Seek(0, SeekOrigin.Begin);
-
-                        virt.Add(filePath, stream);
-                        node.Stream = stream;
-
-                        info.Context = stream;
                     }
                 }
                 catch (IOException)
@@ -187,12 +193,12 @@ namespace DATOneArchiver.DokanDriver
             if (virt.ContainsKey(filePath))
             {
                 virt[filePath].Dispose();
-                virt.Remove(filePath);
+                virt.Remove(filePath, out FileStream _);
 
                 File.Delete(GetVirtPath(filePath));
             }
 
-            parent.Children.Remove(Path.GetFileName(filePath));
+            parent.Children.Remove(Path.GetFileName(filePath), out Archive.Node _);
 
             return DokanResult.Success;
         }
@@ -212,7 +218,7 @@ namespace DATOneArchiver.DokanDriver
                 return DokanResult.DirectoryNotEmpty;
             }
 
-            parent.Children.Remove(Path.GetFileName(filePath));
+            parent.Children.Remove(Path.GetFileName(filePath), out Archive.Node _);
 
             return DokanResult.Success;
         }
@@ -232,16 +238,16 @@ namespace DATOneArchiver.DokanDriver
             }
             else if (!newParent.Children.ContainsKey(Path.GetFileName(newPath)) || replace)
             {
-                oldParent.Children.Remove(Path.GetFileName(oldPath));
-                newParent.Children.Remove(Path.GetFileName(newPath));
+                oldParent.Children.Remove(Path.GetFileName(oldPath), out Archive.Node _);
+                newParent.Children.Remove(Path.GetFileName(newPath), out Archive.Node _);
 
                 virt[oldPath].Dispose();
-                virt.Remove(oldPath);
+                virt.Remove(oldPath, out FileStream _);
 
                 File.Move(GetVirtPath(oldPath), GetVirtPath(newPath), replace);
 
                 var stream = File.Open(GetVirtPath(newPath), FileMode.Open, System.IO.FileAccess.ReadWrite);
-                virt.Add(newPath, stream);
+                virt.TryAdd(newPath, stream);
 
                 archive.Root.Get(newPath, true, node.Children != null).Stream = stream;
 
@@ -271,7 +277,7 @@ namespace DATOneArchiver.DokanDriver
             files = node.Children.Values
                 .Select(n => new FileInformation
                 {
-                    Attributes = n.Children != null ? FileAttributes.Directory : FileAttributes.Normal,
+                    Attributes = n.Children != null ? FileAttributes.Directory : FileAttributes.Archive,
                     FileName = n.Name,
                     Length = n.Stream?.Length ?? 0,
                 }).ToList();
@@ -303,7 +309,7 @@ namespace DATOneArchiver.DokanDriver
 
             fileInfo = new FileInformation
             {
-                Attributes = node.Children != null ? FileAttributes.Directory : FileAttributes.Normal,
+                Attributes = node.Children != null ? FileAttributes.Directory : FileAttributes.Archive,
                 FileName = node.Name,
                 Length = node.Stream?.Length ?? 0,
             };
@@ -352,6 +358,7 @@ namespace DATOneArchiver.DokanDriver
 
         public NtStatus Mounted(string mountPoint, IDokanFileInfo info)
         {
+            Console.WriteLine($"{archive.FilePath} was successfully mounted at {mountPoint}");
             return DokanResult.Success;
         }
 
@@ -374,9 +381,13 @@ namespace DATOneArchiver.DokanDriver
                 archive.Dispose();
                 newArchive.Dispose();
 
-                Directory.Delete(GetVirtPath("\\"), true);
+                if (Directory.Exists(GetVirtPath("\\")))
+                {
+                    Directory.Delete(GetVirtPath("\\"), true);
+                }
                 File.Move(newArchivePath, oldArchivePath, true);
 
+                IsCompleted = true;
                 return DokanResult.Success;
             }
             catch (Exception)
@@ -395,17 +406,20 @@ namespace DATOneArchiver.DokanDriver
                 return DokanResult.Unsuccessful;
             }
 
-            try
+            lock (node.Stream)
             {
-                node.Stream.Seek(offset, SeekOrigin.Begin);
-                bytesRead = node.Stream.Read(buffer, 0, buffer.Length);
+                try
+                {
+                    node.Stream.Seek(offset, SeekOrigin.Begin);
+                    bytesRead = node.Stream.Read(buffer, 0, buffer.Length);
 
-                return DokanResult.Success;
-            }
-            catch (IOException)
-            {
-                bytesRead = 0;
-                return DokanResult.Unsuccessful;
+                    return DokanResult.Success;
+                }
+                catch (IOException)
+                {
+                    bytesRead = 0;
+                    return DokanResult.Unsuccessful;
+                }
             }
         }
 
@@ -419,19 +433,22 @@ namespace DATOneArchiver.DokanDriver
                 return DokanResult.Unsuccessful;
             }
 
-            try
+            lock (node.Stream)
             {
-                node.Stream.Seek(offset, SeekOrigin.Begin);
+                try
+                {
+                    node.Stream.Seek(offset, SeekOrigin.Begin);
 
-                node.Stream.Write(buffer, 0, buffer.Length);
-                bytesWritten = buffer.Length;
+                    node.Stream.Write(buffer, 0, buffer.Length);
+                    bytesWritten = buffer.Length;
 
-                return DokanResult.Success;
-            }
-            catch (IOException)
-            {
-                bytesWritten = 0;
-                return DokanResult.Unsuccessful;
+                    return DokanResult.Success;
+                }
+                catch (IOException)
+                {
+                    bytesWritten = 0;
+                    return DokanResult.Unsuccessful;
+                }
             }
         }
 

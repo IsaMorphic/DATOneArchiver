@@ -17,6 +17,7 @@
 using QuesoStruct.Types.Collections;
 using QuesoStruct.Types.Primitives;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -29,7 +30,7 @@ namespace DATOneArchiver
         public class Node : IComparable<Node>
         {
             public string Name { get; }
-            public Dictionary<string, Node> Children { get; }
+            public ConcurrentDictionary<string, Node> Children { get; }
 
             public bool ShouldDelete { get; set; }
 
@@ -57,7 +58,7 @@ namespace DATOneArchiver
                         else
                             node = new Node(token);
 
-                        current.Children.Add(token, node);
+                        current.Children.TryAdd(token, node);
                         current = node;
                     }
                     else
@@ -72,13 +73,13 @@ namespace DATOneArchiver
 
             public Node()
             {
-                Children = new Dictionary<string, Node>();
+                Children = new ConcurrentDictionary<string, Node>();
             }
 
             public Node(string name)
             {
                 Name = name;
-                Children = new Dictionary<string, Node>();
+                Children = new ConcurrentDictionary<string, Node>();
             }
 
             public Node(string name, short? blobIndex)
