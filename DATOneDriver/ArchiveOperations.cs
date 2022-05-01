@@ -26,11 +26,6 @@ namespace DATOneArchiver.DokanDriver
 {
     internal class ArchiveOperations : IDokanOperations
     {
-        private const FileAccess DataAccess = FileAccess.ReadData | FileAccess.WriteData | FileAccess.AppendData |
-                                              FileAccess.Execute |
-                                              FileAccess.GenericExecute | FileAccess.GenericWrite |
-                                              FileAccess.GenericRead;
-
         private readonly Archive archive;
         private readonly Dictionary<string, FileStream> virt;
 
