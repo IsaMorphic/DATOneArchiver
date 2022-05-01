@@ -2,7 +2,7 @@
   "profiles": {
     "DATOneArchiver.DokanDriver": {
       "commandName": "Project",
-      "commandLineArgs": "GAME.DAT"
+      "commandLineArgs": "-f GAME.DAT -g LSW1 -a 2048 -m H"
     }
   }
 }
