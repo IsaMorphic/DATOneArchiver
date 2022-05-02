@@ -241,15 +241,23 @@ namespace DATOneArchiver.DokanDriver
                 oldParent.Children.Remove(Path.GetFileName(oldPath), out Archive.Node _);
                 newParent.Children.Remove(Path.GetFileName(newPath), out Archive.Node _);
 
-                virt[oldPath].Dispose();
-                virt.Remove(oldPath, out FileStream _);
+                FileStream stream = null;
+                if (node.Children == null)
+                {
+                    virt[oldPath].Dispose();
+                    virt.Remove(oldPath, out FileStream _);
 
-                File.Move(GetVirtPath(oldPath), GetVirtPath(newPath), replace);
+                    File.Move(GetVirtPath(oldPath), GetVirtPath(newPath), replace);
 
-                var stream = File.Open(GetVirtPath(newPath), FileMode.Open, System.IO.FileAccess.ReadWrite);
-                virt.TryAdd(newPath, stream);
+                    stream = File.Open(GetVirtPath(newPath), FileMode.Open, System.IO.FileAccess.ReadWrite);
+                    virt.TryAdd(newPath, stream);
 
-                archive.Root.Get(newPath, true, node.Children != null).Stream = stream;
+                }
+
+                var newNode = archive.Root.Get(newPath, true, node.Children != null);
+
+                newNode.Stream = stream;
+                newNode.Children = node.Children;
 
                 return DokanResult.Success;
             }

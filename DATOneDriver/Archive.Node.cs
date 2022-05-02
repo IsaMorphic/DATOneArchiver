@@ -30,7 +30,7 @@ namespace DATOneArchiver
         public class Node : IComparable<Node>
         {
             public string Name { get; }
-            public ConcurrentDictionary<string, Node> Children { get; }
+            public ConcurrentDictionary<string, Node> Children { get; set; }
 
             public bool ShouldDelete { get; set; }
 
