@@ -79,7 +79,7 @@ namespace DATOneArchiver.DokanDriver
 
             Console.WriteLine("Mounting filesystem...");
 
-            var dokan = new Dokan(new DokanNet.Logging.ConsoleLogger("[DATOneDriver] "));
+            using var dokan = new Dokan(null);
             void OnCancel(object sender, ConsoleCancelEventArgs e)
             {
                 e.Cancel = true;
@@ -91,11 +91,11 @@ namespace DATOneArchiver.DokanDriver
             Console.CancelKeyPress += OnCancel;
 
             var ops = new ArchiveOperations(archive);
-            var instance = new DokanInstanceBuilder(dokan)
+            using var instance = new DokanInstanceBuilder(dokan)
                 .ConfigureOptions(opt =>
                 {
-                    opt.MountPoint = options.MountPoint;
                     opt.Options = DokanOptions.RemovableDrive;
+                    opt.MountPoint = options.MountPoint;
                 }).Build(ops);
 
             await ops.WaitCompleteTask;

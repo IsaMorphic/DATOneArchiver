@@ -38,7 +38,7 @@ namespace DATOneArchiver
 
             public Node Get(string path, bool autoCreate = true, bool dir = false)
             {
-                var tokens = Path.TrimEndingDirectorySeparator(path.ToLowerInvariant())
+                var tokens = Path.TrimEndingDirectorySeparator(path)
                     .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
 
                 var current = this;
@@ -46,8 +46,8 @@ namespace DATOneArchiver
                 {
                     var token = tokens[i];
 
-                    if (current.Children.ContainsKey(token))
-                        current = current.Children[token];
+                    if (current.Children.ContainsKey(token.ToLowerInvariant()))
+                        current = current.Children[token.ToLowerInvariant()];
                     else if (autoCreate)
                     {
                         Node node;
@@ -56,7 +56,7 @@ namespace DATOneArchiver
                         else
                             node = new Node(token);
 
-                        current.Children.TryAdd(token, node);
+                        current.Children.TryAdd(token.ToLowerInvariant(), node);
                         current = node;
                     }
                     else
