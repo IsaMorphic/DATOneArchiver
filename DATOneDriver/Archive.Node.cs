@@ -32,8 +32,6 @@ namespace DATOneArchiver
             public string Name { get; }
             public ConcurrentDictionary<string, Node> Children { get; set; }
 
-            public bool ShouldDelete { get; set; }
-
             public short? BlobIndex { get; set; }
 
             public Stream Stream { get; set; }

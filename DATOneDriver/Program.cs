@@ -23,6 +23,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace DATOneArchiver.DokanDriver
 {
@@ -59,14 +60,14 @@ namespace DATOneArchiver.DokanDriver
             public string MountPoint { get; set; }
         }
 
-        private static void Main(string[] args)
+        private static async Task Main(string[] args)
         {
             Console.OutputEncoding = Encoding.Unicode;
-            Parser.Default.ParseArguments<MountOptions>(args)
-                .WithParsed(RunMount);
+            await Parser.Default.ParseArguments<MountOptions>(args)
+                .MapResult(opt => RunMountAsync(opt), null);
         }
 
-        private static void RunMount(MountOptions options)
+        private static async Task RunMountAsync(MountOptions options)
         {
             var archive = new Archive(
                 options.ArchivePath, ArchiveMode.ReadWrite,
@@ -97,7 +98,7 @@ namespace DATOneArchiver.DokanDriver
                     opt.Options = DokanOptions.RemovableDrive;
                 }).Build(ops);
 
-            while (!ops.IsCompleted) Thread.Sleep(1000);
+            await ops.WaitCompleteTask;
         }
     }
 }
