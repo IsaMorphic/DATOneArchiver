@@ -443,7 +443,10 @@ namespace DATOneArchiver.DokanDriver
             {
                 try
                 {
-                    node.Stream.Seek(offset, SeekOrigin.Begin);
+                    if (offset > 0)
+                        node.Stream.Seek(offset, SeekOrigin.Begin);
+                    else
+                        node.Stream.Seek(0, SeekOrigin.End);
 
                     node.Stream.Write(buffer, 0, buffer.Length);
                     bytesWritten = buffer.Length;
