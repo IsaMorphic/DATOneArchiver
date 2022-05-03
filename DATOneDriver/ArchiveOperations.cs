@@ -21,7 +21,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.AccessControl;
-using System.Threading.Tasks;
 using FileAccess = DokanNet.FileAccess;
 
 namespace DATOneArchiver.DokanDriver
@@ -35,15 +34,12 @@ namespace DATOneArchiver.DokanDriver
 
         private readonly Archive archive;
         private readonly ConcurrentDictionary<string, FileStream> virt;
-        private readonly TaskCompletionSource waitToken;
-
-        public Task WaitCompleteTask => waitToken.Task;
+        public bool IsCompleted { get; private set; }
 
         public ArchiveOperations(Archive archive)
         {
             this.archive = archive;
             virt = new ConcurrentDictionary<string, FileStream>();
-            waitToken = new TaskCompletionSource();
         }
 
         private string GetVirtPath(string filePath)
@@ -393,11 +389,12 @@ namespace DATOneArchiver.DokanDriver
                 }
                 File.Move(newArchivePath, oldArchivePath, true);
 
-                waitToken.SetResult();
+                IsCompleted = true;
                 return DokanResult.Success;
             }
             catch (Exception)
             {
+                IsCompleted = true;
                 return DokanResult.Error;
             }
         }

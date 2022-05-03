@@ -22,7 +22,6 @@ using QuesoStruct;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace DATOneArchiver.DokanDriver
@@ -60,10 +59,10 @@ namespace DATOneArchiver.DokanDriver
             public string MountPoint { get; set; }
         }
 
-        private static async Task Main(string[] args)
+        private static Task Main(string[] args)
         {
             Console.OutputEncoding = Encoding.Unicode;
-            await Parser.Default.ParseArguments<MountOptions>(args)
+            return Parser.Default.ParseArguments<MountOptions>(args)
                 .MapResult(opt => RunMountAsync(opt), null);
         }
 
@@ -78,6 +77,7 @@ namespace DATOneArchiver.DokanDriver
             archive.Read();
 
             Console.WriteLine("Mounting filesystem...");
+            var ops = new ArchiveOperations(archive);
 
             using var dokan = new Dokan(null);
             void OnCancel(object sender, ConsoleCancelEventArgs e)
@@ -89,8 +89,7 @@ namespace DATOneArchiver.DokanDriver
                 Console.WriteLine("Unmount successful");
             }
             Console.CancelKeyPress += OnCancel;
-
-            var ops = new ArchiveOperations(archive);
+            
             using var instance = new DokanInstanceBuilder(dokan)
                 .ConfigureOptions(opt =>
                 {
@@ -98,7 +97,7 @@ namespace DATOneArchiver.DokanDriver
                     opt.MountPoint = options.MountPoint;
                 }).Build(ops);
 
-            await ops.WaitCompleteTask;
+            while (!ops.IsCompleted) await Task.Delay(1000);
         }
     }
 }
