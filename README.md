@@ -19,7 +19,7 @@ Install the [latest version of Dokan 2.x](https://github.com/dokan-dev/dokany/re
    3. `git switch dokan-driver`
    4. `cd DATOneDriver`
    5. `dotnet build -c Debug` (do not do a release build; it is unstable for reasons I do not understand)
-3. Find your binaries. Should be in `bin/Release/net6.0-windows`. 
+3. Find your binaries. Should be in `bin/Debug/net6.0-windows`. 
 5. Proceed with **How Use?** instructions
 
 ### To Download
